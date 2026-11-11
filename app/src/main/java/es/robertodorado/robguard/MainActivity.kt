@@ -10,6 +10,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.PersistableBundle
+import android.os.SystemClock
 import android.view.WindowManager
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -34,6 +35,7 @@ class MainActivity : FragmentActivity() {
     private val handler = Handler(Looper.getMainLooper())
     private val idleTimeout = Runnable { lockVault() }
     private var clipboardToken: String? = null
+    private var clipboardExpiryMs: Long = 0L
     private var started = false
     private val legacyCredentialLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -63,6 +65,10 @@ class MainActivity : FragmentActivity() {
         // El resultado de PIN/patrón puede despacharse dentro de super.onStart().
         started = true
         super.onStart()
+        val pending = clipboardToken
+        if (pending != null && SystemClock.elapsedRealtime() >= clipboardExpiryMs) {
+            clearOwnClipboard(pending)
+        }
     }
 
     override fun onStop() {
@@ -214,19 +220,30 @@ class MainActivity : FragmentActivity() {
         }
         clipboard.setPrimaryClip(clip)
         clipboardToken = token
+        clipboardExpiryMs = SystemClock.elapsedRealtime() + 30_000L
         handler.postDelayed({ clearOwnClipboard(token) }, 30_000L)
         armIdleTimeout()
     }
 
     private fun clearOwnClipboard(token: String) {
         val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-        if (clipboard.primaryClipDescription?.label?.toString() != token) return
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            clipboard.clearPrimaryClip()
-        } else {
-            clipboard.setPrimaryClip(ClipData.newPlainText("", ""))
+        try {
+            // Android 10+ puede devolver null cuando nuestra app no tiene el foco.
+            // No reemplazar a ciegas contenido copiado por otras aplicaciones.
+            val current = clipboard.primaryClipDescription ?: return
+            if (current.label?.toString() != token) {
+                if (clipboardToken == token) clipboardToken = null
+                return
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                clipboard.clearPrimaryClip()
+            } else {
+                clipboard.setPrimaryClip(ClipData.newPlainText("", ""))
+            }
+            if (clipboardToken == token) clipboardToken = null
+        } catch (_: SecurityException) {
+            // Restricciones de acceso al portapapeles sin foco: reintentar al volver.
         }
-        if (clipboardToken == token) clipboardToken = null
     }
 
     private fun armIdleTimeout() {
