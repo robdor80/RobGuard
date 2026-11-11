@@ -515,7 +515,8 @@ private fun SettingsContent(
         "Android puede impedir comprobar el portapapeles en segundo plano.")
     InfoCard("Google y Firebase", when {
         !googleConfigured -> "Pendiente de configurar Firebase para la Release oficial."
-        googleAccount != null -> "Cuenta autorizada: $googleAccount. Aún no se han subido datos."
+        googleAccount != null -> "Cuenta autorizada: $googleAccount. " +
+            if (cloudPaired) "Vinculación cifrada activa." else "Copia aún no vinculada."
         else -> "Conecta la única cuenta Google autorizada. La bóveda seguirá siendo local."
     })
     if (googleAccount == null) {
