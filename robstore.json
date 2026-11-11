@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "name": "RobGuard",
+  "description": "Gestor personal de contraseñas cifradas con acceso sin conexión y sincronización Firebase.",
+  "packageName": "es.robertodorado.robguard",
+  "icon": "robstore/icon.png",
+  "apkAssetName": "Android-release.apk",
+  "versionCode": 1,
+  "versionName": "0.1.0"
+}
