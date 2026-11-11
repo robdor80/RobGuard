@@ -255,9 +255,14 @@ class MainActivity : FragmentActivity() {
             records = opened.records
             unlocked = true
             message = null
-            cloudPaired = ownerAuth.authorizedUid?.let { uid ->
-                storage.readCloudBaseline(opened, uid) != null
-            } ?: false
+            // Un fallo de la caché de nube jamás impide abrir la bóveda local.
+            cloudPaired = try {
+                ownerAuth.authorizedUid?.let { uid ->
+                    storage.readCloudBaseline(opened, uid) != null
+                } ?: false
+            } catch (_: Exception) {
+                false
+            }
             cloudStatus = if (cloudPaired) "Sincronización cifrada activada"
                 else "Copia cifrada pendiente de activar o recuperar"
             armIdleTimeout()
@@ -328,7 +333,20 @@ class MainActivity : FragmentActivity() {
             try {
                 val email = ownerAuth.signIn(this@MainActivity)
                 accountLabel = email
-                message = "Cuenta Google autorizada. RG-02 todavía no ha activado la sincronización."
+                val active = session
+                cloudPaired = if (active?.isOpen == true) {
+                    try {
+                        ownerAuth.authorizedUid?.let { uid ->
+                            storage.readCloudBaseline(active, uid) != null
+                        } ?: false
+                    } catch (_: Exception) {
+                        false
+                    }
+                } else false
+                cloudStatus = if (cloudPaired) "Sincronización cifrada activada"
+                    else "Puedes crear o recuperar una copia cifrada"
+                message = null
+                if (cloudPaired) syncCloud()
             } catch (_: Exception) {
                 accountLabel = null
                 message = "No se completó la vinculación Google. Comprueba cuenta y configuración."
@@ -364,6 +382,7 @@ class MainActivity : FragmentActivity() {
                 if (session === active && unlocked) {
                     cloudPaired = true
                     cloudStatus = "Copia cifrada creada · revisión ${result.revision}"
+                    cloudConflict = false
                     message = null
                 }
             } catch (_: Exception) {
@@ -507,6 +526,7 @@ class MainActivity : FragmentActivity() {
 
     private fun lockVault() {
         recoveryCode = null
+        cloudConflict = false
         handler.removeCallbacks(idleTimeout)
         // Al ir a otra app se bloquea la bóveda, pero debe quedar tiempo para pegar.
         // El portapapeles sigue bajo el temporizador de 30 s independiente.
