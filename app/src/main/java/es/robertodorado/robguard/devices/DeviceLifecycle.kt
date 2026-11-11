@@ -41,10 +41,11 @@ internal data class DeviceRecord(
 internal object DeviceLifecycle {
     fun acceptsVerifiedTransition(from: DeviceStatus, to: DeviceStatus): Boolean =
         when (from) {
-            DeviceStatus.PENDING -> to == DeviceStatus.AUTHORIZED || to == DeviceStatus.REVOKED
-            DeviceStatus.AUTHORIZED -> to == DeviceStatus.REVOKE_PENDING
+            DeviceStatus.PENDING -> to == DeviceStatus.AUTHORIZED
+            DeviceStatus.AUTHORIZED -> to == DeviceStatus.REVOKE_PENDING ||
+                to == DeviceStatus.REVOKED
             DeviceStatus.REVOKE_PENDING ->
-                to == DeviceStatus.REVOKED || to == DeviceStatus.WIPE_CONFIRMED
+                to == DeviceStatus.REVOKED
             DeviceStatus.REVOKED -> to == DeviceStatus.WIPE_CONFIRMED
             DeviceStatus.WIPE_CONFIRMED -> false
         }
