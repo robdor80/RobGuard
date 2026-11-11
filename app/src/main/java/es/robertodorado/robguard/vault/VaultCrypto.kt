@@ -19,9 +19,13 @@ internal object VaultCrypto {
     fun newDataKey(): ByteArray = ByteArray(32).also(random::nextBytes)
 
     fun seal(key: SecretKey, clear: ByteArray, purpose: String): ByteArray {
-        val iv = ByteArray(IV_SIZE).also(random::nextBytes)
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-        cipher.init(Cipher.ENCRYPT_MODE, key, GCMParameterSpec(TAG_BITS, iv))
+        // Android Keystore, con randomizedEncryptionRequired=true, prohíbe
+        // expresamente que el caller aporte un IV al CIFRAR.
+        // Dejar que el proveedor criptográfico lo genere internamente.
+        cipher.init(Cipher.ENCRYPT_MODE, key)
+        val iv = cipher.iv
+        check(iv != null && iv.size == IV_SIZE) { "IV GCM del proveedor no válido" }
         cipher.updateAAD(purpose.toByteArray(Charsets.UTF_8))
         return magic + iv + cipher.doFinal(clear)
     }
