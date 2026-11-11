@@ -30,14 +30,14 @@ jobs:
       - name: Pruebas, lint y compilación sin firmas de distribución
         run: |
           chmod +x gradlew
-          ./gradlew :app:testReleaseUnitTest :app:lintRelease :app:assembleRelease :app:assembleDebug --no-daemon
+          ./gradlew :app:testReleaseUnitTest :app:lintRelease :app:assembleRelease :app:assembleDebug :app:assembleDiagnostic --no-daemon
       - name: Verificar contrato RS-05
         run: python3 tools/check_rg00.py
       - name: APK de desarrollo para pruebas manuales (no Release)
         if: github.event_name == 'pull_request'
         uses: actions/upload-artifact@v4
         with:
-          name: RobGuard-RG01-debug
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: RobGuard-RG01-diagnostico
+          path: app/build/outputs/apk/diagnostic/app-diagnostic.apk
           if-no-files-found: error
           retention-days: 7
