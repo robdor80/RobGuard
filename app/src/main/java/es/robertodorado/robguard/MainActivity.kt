@@ -374,7 +374,9 @@ class MainActivity : FragmentActivity() {
         val code = recoveryCode ?: return
         val active = session?.takeIf { unlocked && it.isOpen } ?: return
         if (cloudBusy) return
-        recoveryCode = null
+        // Mantener visible el código durante la operación. Si el servidor
+        // confirma pero falla la persistencia local, el usuario conservará
+        // el código necesario para recuperar o revincular la copia cifrada.
         cloudBusy = true
         lifecycleScope.launch {
             try {
@@ -383,10 +385,16 @@ class MainActivity : FragmentActivity() {
                     cloudPaired = true
                     cloudStatus = "Copia cifrada creada · revisión ${result.revision}"
                     cloudConflict = false
+                    recoveryCode = null
                     message = null
                 }
             } catch (_: Exception) {
-                message = "No se pudo crear la copia. Nada se sobrescribió. Conserva tu código."
+                // Un fallo después de la transacción puede dejar una copia
+                // remota válida: nunca asegurar que no se escribió nada.
+                if (session === active && unlocked) {
+                    message = "No se confirmó la copia. Conserva el código y comprueba " +
+                        "el estado antes de reintentar o recuperar."
+                }
             } finally {
                 cloudBusy = false
             }
