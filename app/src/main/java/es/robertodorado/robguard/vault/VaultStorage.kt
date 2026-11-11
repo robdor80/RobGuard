@@ -6,6 +6,7 @@ import android.os.Build
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.AtomicFile
+import android.util.Base64
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -25,6 +26,8 @@ internal class VaultStorage(context: Context) {
     }
     private val wrappedKeyFile = AtomicFile(File(directory, "key.rg01"))
     private val entriesFile = AtomicFile(File(directory, "entries.rg01"))
+    private val cloudStateFile = AtomicFile(File(directory, "cloud-state.rg02"))
+    private val restoreJournalFile = AtomicFile(File(directory, "restore-journal.rg02"))
 
     /**
      * Preparar la KEK ANTES del diálogo de autenticación: así el token concedido
@@ -33,6 +36,7 @@ internal class VaultStorage(context: Context) {
      */
     fun prepareForAuthentication() {
         checkDeviceSecurity()
+        rollbackInterruptedRestore()
         val hasKeyFile = wrappedKeyFile.baseFile.exists()
         val hasRecords = entriesFile.baseFile.exists()
         check(hasKeyFile == hasRecords) {
@@ -104,6 +108,162 @@ internal class VaultStorage(context: Context) {
             session.records = entries.toList()
         } finally {
             plaintext.fill(0)
+        }
+    }
+
+
+    /**
+     * Snapshot íntegro RG01 cifrado antes de salir del dispositivo.
+     * AAD separada de la de archivos locales y ligada a Firebase UID.
+     */
+    fun encryptForCloud(session: VaultSession, uid: String, entries: List<VaultEntry>): ByteArray {
+        check(session.isOpen) { "Bóveda bloqueada" }
+        val clear = encode(entries)
+        return try {
+            VaultCrypto.seal(session.secretKey(), clear, CLOUD_DATA_PURPOSE + uid)
+        } finally {
+            clear.fill(0)
+        }
+    }
+
+    fun decryptFromCloud(session: VaultSession, uid: String, cipher: ByteArray): List<VaultEntry> {
+        val clear = VaultCrypto.open(session.secretKey(), cipher, CLOUD_DATA_PURPOSE + uid)
+        return try {
+            decode(clear)
+        } finally {
+            clear.fill(0)
+        }
+    }
+
+    fun wrapRecoveryKey(session: VaultSession, uid: String, code: String): ByteArray {
+        val dek = session.secretKey().encoded
+        return try {
+            RecoveryCrypto.wrapDek(dek, uid, code)
+        } finally {
+            dek.fill(0)
+        }
+    }
+
+    data class CloudBaseline(
+        val revision: Long,
+        val wrappedDek: ByteArray,
+        val entries: List<VaultEntry>
+    )
+
+    fun readCloudBaseline(session: VaultSession, uid: String): CloudBaseline? {
+        check(session.isOpen) { "Bóveda bloqueada" }
+        if (!cloudStateFile.baseFile.exists()) return null
+        val cipher = cloudStateFile.readFully()
+        val clear = VaultCrypto.open(session.secretKey(), cipher, CLOUD_STATE_PURPOSE + uid)
+        return try {
+            val root = JSONObject(String(clear, Charsets.UTF_8))
+            require(root.getInt("schema") == 2 && root.getString("uid") == uid) {
+                "Cuenta o esquema de sincronización incompatible"
+            }
+            val revision = root.getLong("revision")
+            require(revision > 0) { "Revisión de nube inválida" }
+            val wrapped = Base64.decode(root.getString("wrappedDek"), Base64.NO_WRAP)
+            val baseline = Base64.decode(root.getString("baseline"), Base64.NO_WRAP)
+            val records = try { decode(baseline) } finally { baseline.fill(0) }
+            CloudBaseline(revision, wrapped, records)
+        } finally {
+            clear.fill(0)
+        }
+    }
+
+    fun writeCloudBaseline(
+        session: VaultSession, uid: String, revision: Long,
+        wrappedDek: ByteArray, entries: List<VaultEntry>
+    ) {
+        check(session.isOpen && revision > 0) { "Estado de sincronización inválido" }
+        val serialized = encode(entries)
+        val clear = try {
+            JSONObject()
+                .put("schema", 2).put("uid", uid).put("revision", revision)
+                .put("wrappedDek", Base64.encodeToString(wrappedDek, Base64.NO_WRAP))
+                .put("baseline", Base64.encodeToString(serialized, Base64.NO_WRAP))
+                .toString().toByteArray(Charsets.UTF_8)
+        } finally {
+            serialized.fill(0)
+        }
+        try {
+            atomicWrite(
+                cloudStateFile,
+                VaultCrypto.seal(session.secretKey(), clear, CLOUD_STATE_PURPOSE + uid)
+            )
+        } finally {
+            clear.fill(0)
+        }
+    }
+
+    /**
+     * Restauración segura solo sobre una bóveda local VACÍA.
+     * Antes de sustituir dos ficheros RG01 se escribe un diario con copias
+     * CIFRADAS; si hay caída de energía el arranque deshace la operación.
+     */
+    fun importRecoveredVault(
+        oldSession: VaultSession, uid: String, code: String,
+        wrappedDek: ByteArray, cloudCipher: ByteArray, revision: Long
+    ): VaultSession {
+        check(oldSession.isOpen && oldSession.records.isEmpty() &&
+            !cloudStateFile.baseFile.exists() && revision > 0) {
+            "No se sobrescribe una bóveda local existente"
+        }
+        val dek = RecoveryCrypto.recoverDek(wrappedDek, uid, code)
+        try {
+            val clear = VaultCrypto.open(
+                VaultCrypto.dataKey(dek), cloudCipher, CLOUD_DATA_PURPOSE + uid
+            )
+            val recovered = try { decode(clear) } finally { clear.fill(0) }
+            val localClear = encode(recovered)
+            val localCipher = try {
+                VaultCrypto.seal(VaultCrypto.dataKey(dek), localClear, DATA_PURPOSE)
+            } finally {
+                localClear.fill(0)
+            }
+            // Requiere autenticación Keystore reciente. Si expiró, falla
+            // sin escribir nada y el usuario vuelve a autenticar Android.
+            val localWrapped = VaultCrypto.seal(existingDeviceKey(), dek, KEY_PURPOSE)
+            val oldKey = wrappedKeyFile.readFully()
+            val oldEntries = entriesFile.readFully()
+            val journal = JSONObject()
+                .put("key", Base64.encodeToString(oldKey, Base64.NO_WRAP))
+                .put("entries", Base64.encodeToString(oldEntries, Base64.NO_WRAP))
+                .toString().toByteArray(Charsets.UTF_8)
+            atomicWrite(restoreJournalFile, journal)
+            val newSession = VaultSession(dek, recovered)
+            try {
+                atomicWrite(wrappedKeyFile, localWrapped)
+                atomicWrite(entriesFile, localCipher)
+                writeCloudBaseline(newSession, uid, revision, wrappedDek, recovered)
+                restoreJournalFile.delete()
+                oldSession.close()
+                return newSession
+            } catch (error: Exception) {
+                newSession.close()
+                rollbackInterruptedRestore()
+                throw error
+            } finally {
+                journal.fill(0)
+            }
+        } finally {
+            dek.fill(0)
+        }
+    }
+
+    private fun rollbackInterruptedRestore() {
+        if (!restoreJournalFile.baseFile.exists()) return
+        val journal = JSONObject(String(restoreJournalFile.readFully(), Charsets.UTF_8))
+        val previousKey = Base64.decode(journal.getString("key"), Base64.NO_WRAP)
+        val previousEntries = Base64.decode(journal.getString("entries"), Base64.NO_WRAP)
+        try {
+            atomicWrite(wrappedKeyFile, previousKey)
+            atomicWrite(entriesFile, previousEntries)
+            cloudStateFile.delete()
+            restoreJournalFile.delete()
+        } finally {
+            previousKey.fill(0)
+            previousEntries.fill(0)
         }
     }
 
@@ -188,6 +348,8 @@ internal class VaultStorage(context: Context) {
         private const val ALIAS = "es.robertodorado.robguard.local.kek.v1"
         private const val KEY_PURPOSE = "RobGuard/DEK/local/v1"
         private const val DATA_PURPOSE = "RobGuard/entries/v1"
+        private const val CLOUD_DATA_PURPOSE = "RobGuard/cloud/entries/v1/"
+        private const val CLOUD_STATE_PURPOSE = "RobGuard/cloud/baseline/v1/"
     }
 }
 

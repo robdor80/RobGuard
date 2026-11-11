@@ -12,6 +12,7 @@ import com.google.firebase.FirebaseApp
 import com.google.firebase.FirebaseOptions
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.GoogleAuthProvider
+import com.google.firebase.firestore.FirebaseFirestore
 import es.robertodorado.robguard.R
 import kotlinx.coroutines.tasks.await
 
@@ -59,6 +60,10 @@ internal class GoogleOwnerAuth(context: Context) {
 
     val authorizedEmail: String?
         get() = if (authorizedUid == null) null else auth?.currentUser?.email
+
+    val firestore: FirebaseFirestore?
+        get() = if (authorizedUid != null) firebaseApp?.let(FirebaseFirestore::getInstance)
+                else null
 
     suspend fun signIn(activity: Activity): String {
         check(isConfigured) { "Firebase no configurado" }
