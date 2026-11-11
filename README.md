@@ -2,7 +2,7 @@
 
 Gestor **personal** de contraseñas para Android, con acceso local sin conexión y sincronización cifrada prevista con Firebase.
 
-**Estado:** RG-01 en desarrollo (PR Draft). Hay bóveda cifrada local, CRUD, búsqueda, generador y desbloqueo del dispositivo. **Todavía no hay recuperación ni sincronización Firebase**. No usar como única copia de contraseñas reales hasta completar RG-02 y las pruebas de dispositivos.
+**Estado:** RG-01 implementada y comprobada en CI; RG-02 es la siguiente fase. Incluye bóveda cifrada local, CRUD, búsqueda, generador y desbloqueo del dispositivo. **Todavía no hay recuperación ni sincronización Firebase** ni una Release publicada/verificada en Android real. No usar como única copia de contraseñas reales hasta completar RG-02 y las pruebas oficiales de RG-04.
 
 ## Decisiones
 
