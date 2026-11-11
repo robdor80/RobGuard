@@ -1,4 +1,4 @@
-name: Android RG-00
+name: RobGuard Android CI
 
 on:
   push:
@@ -6,6 +6,10 @@ on:
 
 permissions:
   contents: read
+
+concurrency:
+  group: android-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
@@ -23,9 +27,9 @@ jobs:
           log-accepted-android-sdk-licenses: false
       - name: Instalar SDK
         run: sdkmanager 'platforms;android-36' 'build-tools;35.0.0'
-      - name: Verificar fuentes y compilar sin firmas
+      - name: Pruebas, lint y compilación sin firmas de distribución
         run: |
           chmod +x gradlew
           ./gradlew :app:testReleaseUnitTest :app:lintRelease :app:assembleRelease --no-daemon
-      - name: Verificar contrato inicial
+      - name: Verificar contrato RS-05
         run: python3 tools/check_rg00.py
