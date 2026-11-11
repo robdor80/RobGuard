@@ -1,14 +1,14 @@
 # Plan reducido RobGuard
 
-Estado actualizado (11/11/2026): **RG-00, RG-01, RG-02 y RG-03 integradas en `main`**. RG-03 se fusionó mediante [PR #4](https://github.com/robdor80/RobGuard/pull/4) tras superar Android CI (Release sin firma) y pruebas adversariales de reglas Firestore. **El modo RG-03 continúa desactivado y sus reglas todavía no se han desplegado en Firebase.** RG-04 prepara y certifica la distribución oficial. Sin Codex por defecto.
+Estado actualizado (11/11/2026): **RG-00 a RG-03 integradas en main y RG-04 validada en el Realme GT Neo 2**, con Releases oficiales 0.1.0 y 0.2.0. El modo RG-03 está activado en 0.2.0; el propietario confirmó publicación de reglas definitivas en Firebase y sincronización del Realme autorizado. Android CI y pruebas adversariales del emulador superadas. **Falta certificación física en Galaxy Tab S9+, recuperación y revocación real entre dos instalaciones.** Sin Codex por defecto.
 
 | Fase | Entrega |
 | --- | --- |
 | RG-00 ✅ | Proyecto Android, interfaz, identidad, icono y contrato RS-05 |
-| RG-01 ✅ (código) | Bóveda cifrada offline, CRUD, búsqueda, generación y biometría; prueba física pendiente |
-| RG-02 ✅ (código) | Cuenta Google única, recuperación y sincronización cifrada Firebase; prueba física pendiente |
-| RG-03 ✅ (código) | Identidad por instalación, inventario, revocación y borrado diferido; modo desactivado y reglas no desplegadas |
-| RG-04 ▶ | Primera Release firmada vía RobPublisher/RobStore, validación Realme y migración RG-03; Galaxy Tab S9+ después |
+| RG-01 ✅ (Realme) | Bóveda cifrada offline, CRUD básico, generación, huella, persistencia y bloqueo por inactividad comprobados |
+| RG-02 ✅ (Realme) | Cuenta Google única, copia cifrada y sincronización verificada; recuperación en segunda instalación pendiente |
+| RG-03 ✅ (Realme autorizado) | Identidad por instalación activada en 0.2.0; reglas finales publicadas según propietario; pruebas negativas y revocación física pendientes |
+| RG-04 ▶ (Realme PASS) | Releases 0.1.0 y 0.2.0 instaladas/actualizadas vía RobPublisher/RobStore y probadas en Realme; tablet y denegaciones reales pendientes |
 
 Consultar **[RG-04: procedimiento completo](RG-04.md)** y [RG-03: migración](RG-03-MIGRACION.md).
 
