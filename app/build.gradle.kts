@@ -25,14 +25,6 @@ android {
         release {
             isMinifyEnabled = false
         }
-        // Instalación paralela a .debug: permite probar correcciones sin borrar
-        // la app anterior, aunque el runner de CI firme con otra clave Debug.
-        create("diagnostic") {
-            initWith(getByName("debug"))
-            applicationIdSuffix = ".diagnostic"
-            versionNameSuffix = "-DIAGNOSTIC"
-            matchingFallbacks += listOf("debug")
-        }
     }
 
     compileOptions {
