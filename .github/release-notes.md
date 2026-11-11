@@ -1,24 +1,19 @@
-# RobGuard 0.2.0 — Autorización individual de dispositivos (RG-03)
+# RobGuard 0.2.1 — Nuevo icono RobStyle (RG-05)
 
-**Versión candidata, NO publicar hasta finalizar la preparación de Firebase indicada en `docs/RG-03-MIGRACION.md`.**
+Actualización visual oficial del icono: escudo tecnológico azul/cian con bordes plateados y candado dorado, recortado sobre transparencia real, sin fondo negro.
 
-## Novedades
-- Identidad de instalación separada de la cuenta Google del propietario.
-- Inventario de dispositivos registrados y estados pendientes/autorizados.
-- Aprobación de dispositivos adicionales desde un dispositivo ya autorizado.
-- Revocación del acceso a la bóveda de Firebase por instalación.
-- Solicitud de borrado local diferido cuando una instalación revocada vuelva a ejecutar RobGuard con conexión.
+## Cambios
+- Nuevo icono del lanzador Android, también en el icono redondo/adaptativo.
+- Actualizado el icono del catálogo RobStore con el mismo emblema.
+- La imagen se centra dentro del área segura de los iconos adaptativos de Android.
+- Sin modificaciones en la lógica de la aplicación, cifrado, datos, autenticación, reglas Firebase ni sincronización.
 
-## Migración segura desde 0.1.0
-- Esta versión activa el modo RG-03. **Antes de publicarla**, el propietario debe habilitar Firebase Auth Anonymous y desplegar temporalmente `firestore.rg03.preparation.rules`.
-- El Realme debe aparecer inicialmente como `pending` y ser autorizado una sola vez mediante Firebase Console.
-- Después de verificar que la instalación autorizada puede sincronizar, sustituir las reglas temporales por **`firestore.rg03.rules` finales**.
-- No borrar ni reinstalar RobGuard: la actualización conserva la bóveda local y sus datos cuando Android reconoce el mismo paquete y certificado.
-- Durante las reglas temporales la sesión Google antigua sigue permitida y la revocación aún no está garantizada.
-- El borrado remoto requiere que la aplicación revocada vuelva a ejecutarse online; no se garantiza eliminación física ni acceso a un dispositivo apagado.
-- La autorización utiliza credenciales Firebase por instalación, no una prueba hardware intransferible.
+## Actualización segura
+- Identidad Android invariable: `es.robertodorado.robguard`.
+- `versionCode=3`, `versionName=0.2.1`.
+- Publicar exclusivamente mediante **RobPublisher → RS-05 → GitHub Release → RobStore**.
+- Utilizar la misma clave/certificado Release que en 0.1.0 y 0.2.0; no reinstalar ni borrar datos.
+- La instalación sigue sujeta a las confirmaciones exigidas por Android.
 
-## Publicación oficial
-Solo mediante **RobPublisher → RS-05 → GitHub Release → RobStore**, conservando `es.robertodorado.robguard` y el certificado Release original. `versionCode=2`, `versionName=0.2.0`.
-
-No utilizar contraseñas reales como única copia hasta certificar recuperación y revocación física en la tablet.
+## Validación RG-04
+Las pruebas físicas de recuperación y revocación entre el Realme y la Galaxy Tab S9+ continúan pendientes. Hasta completarlas, no guardar contraseñas reales como única copia.
