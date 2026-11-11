@@ -79,7 +79,7 @@ internal class VaultStorage(context: Context) {
         check(session.isOpen) { "Bóveda bloqueada" }
         require(entries.size <= 10000) { "Límite de entradas excedido" }
         require(entries.map { it.id }.toSet().size == entries.size) { "Entradas duplicadas" }
-        entries.forEach(VaultEntry::validate)
+        entries.forEach { it.validate() }
         val plaintext = encode(entries)
         try {
             val ciphertext = VaultCrypto.seal(session.secretKey(), plaintext, DATA_PURPOSE)
