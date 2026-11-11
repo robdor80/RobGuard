@@ -16,3 +16,6 @@ El cambio visual de RG-05 convirtió `@drawable/ic_robguard_foreground` de vecto
 - **Lección:** los tests de JVM y la compilación no sustituyen una prueba de arranque en dispositivo físico cuando se cambian recursos Compose.
 
 La actualización resuelve el origen estático, pero la corrección en dispositivo no queda certificada hasta prueba física.
+
+## Mejora adicional solicitada: calidad del icono
+La 0.2.1 utilizaba PNG de solo 128 × 128 píxeles, demasiado pequeño para el renderizado de Compose a densidades altas. La 0.2.2 sustituye ambas copias del PNG por el diseño aprobado renderizado a 512 × 512, formato RGBA con transparencia y sin pérdida de color. Se añade una prueba estática de resolución, identidad de recursos y referencia Compose en `tools/check_rg00.py`.
