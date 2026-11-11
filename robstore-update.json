@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "channel": "release",
+  "packageName": "es.robertodorado.robguard",
+  "versionCode": 2,
+  "versionName": "0.2.0",
+  "apkAssetName": "Android-release.apk",
+  "sha256": "c99b368339c1254ff59169447f3a4b1e73338f38947db48bc217c7fc75f28548"
+}
