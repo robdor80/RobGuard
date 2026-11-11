@@ -84,6 +84,8 @@ internal fun RobGuardApp(
     onConnectGoogle: () -> Unit = {},
     onDisconnectGoogle: () -> Unit = {},
     cloudPaired: Boolean = false,
+    cloudConflict: Boolean = false,
+    onResolveConflicts: () -> Unit = {},
     cloudBusy: Boolean = false,
     cloudStatus: String = "Sólo almacenamiento local",
     recoveryCode: String? = null,
@@ -100,6 +102,7 @@ internal fun RobGuardApp(
                 UnlockedApp(entries, message, onLock, onSave, onDelete, onCopy,
                     googleConfigured, googleAccount, onConnectGoogle, onDisconnectGoogle,
                     cloudPaired, cloudBusy, cloudStatus, recoveryCode,
+                    cloudConflict, onResolveConflicts,
                     onPrepareBackup, onConfirmBackup, onCancelBackup, onRecover, onSyncCloud)
             }
         } else {
@@ -174,6 +177,8 @@ private fun UnlockedApp(
     onConnectGoogle: () -> Unit,
     onDisconnectGoogle: () -> Unit,
     cloudPaired: Boolean,
+    cloudConflict: Boolean,
+    onResolveConflicts: () -> Unit,
     cloudBusy: Boolean,
     cloudStatus: String,
     recoveryCode: String?,
@@ -252,6 +257,7 @@ private fun UnlockedApp(
                     GuardSection.SETTINGS -> SettingsContent(onLock,
                         googleConfigured, googleAccount, onConnectGoogle, onDisconnectGoogle,
                         cloudPaired, cloudBusy, cloudStatus, recoveryCode,
+                        cloudConflict, onResolveConflicts,
                         onPrepareBackup, onConfirmBackup, onCancelBackup, onRecover, onSyncCloud)
                 }
             }
@@ -518,6 +524,15 @@ private fun SettingsContent(
         TextButton(onClick = onDisconnectGoogle) { Text("Desconectar Google") }
     }
     InfoCard("Sincronización cifrada", cloudStatus)
+    if (cloudConflict) {
+        InfoCard("Conflicto entre dispositivos", "Hay modificaciones simultáneas. " +
+            "Puedes conservar las dos versiones con nombres distintos para " +
+            "revisarlas. Las eliminaciones enfrentadas a ediciones conservarán " +
+            "la versión editada.")
+        Button(onClick = onResolveConflicts, enabled = !cloudBusy) {
+            Text("Conservar versiones en conflicto")
+        }
+    }
     if (googleAccount != null) {
         if (cloudPaired) {
             Button(onClick = onSyncCloud, enabled = !cloudBusy) { Text("Sincronizar ahora") }

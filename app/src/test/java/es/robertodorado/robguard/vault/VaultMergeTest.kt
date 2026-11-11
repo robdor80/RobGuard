@@ -38,6 +38,25 @@ class VaultMergeTest {
         assertFalse(result.canPublish)
     }
 
+    @Test fun twoConflictingEditsPreserveBoth() {
+        val base = listOf(record("a"))
+        val ours = listOf(record("a", "mobile"))
+        val theirs = listOf(record("a", "tablet"))
+        val result = VaultMerge.resolveKeepingCopies(base, ours, theirs) { "new-a" }
+        assertEquals(2, result.size)
+        assertEquals("tablet", result.single { it.id == "a" }.password)
+        assertEquals("mobile", result.single { it.id == "new-a" }.password)
+        assertTrue(result.single { it.id == "new-a" }.title.endsWith("(copia local)"))
+    }
+
+    @Test fun conflictingDeletionVersusModificationRetainsEditedVersion() {
+        val base = listOf(record("a"))
+        val ours = emptyList<VaultEntry>()
+        val theirs = listOf(record("a", "tablet"))
+        val resolved = VaultMerge.resolveKeepingCopies(base, ours, theirs) { "unused" }
+        assertEquals(theirs, resolved)
+    }
+
     @Test fun sameEditsDoNotConflict() {
         val base = listOf(record("a"))
         val both = listOf(record("a", "same"))

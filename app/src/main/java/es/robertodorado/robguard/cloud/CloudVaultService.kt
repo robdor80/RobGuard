@@ -97,7 +97,9 @@ internal class CloudVaultService(
         return restored to SyncResult(restored.records, remote.revision)
     }
 
-    suspend fun synchronize(session: VaultSession): SyncResult {
+    suspend fun synchronize(
+        session: VaultSession, preserveConflictsAsCopies: Boolean = false
+    ): SyncResult {
         val (uid, ref) = authorized()
         val baseline = storage.readCloudBaseline(session, uid)
             ?: error("No hay vinculación cifrada. Crea o recupera la copia primero")
@@ -109,8 +111,13 @@ internal class CloudVaultService(
         check(remote.revision >= baseline.revision) { "Revisión remota anterior a la local" }
         val remoteEntries = storage.decryptFromCloud(session, uid, remote.entries)
         val result = VaultMerge.merge(baseline.entries, session.records, remoteEntries)
-        if (!result.canPublish) throw Conflict(result.conflicts.size)
-        val merged = result.merged
+        val merged = when {
+            result.canPublish -> result.merged
+            preserveConflictsAsCopies -> VaultMerge.resolveKeepingCopies(
+                baseline.entries, session.records, remoteEntries
+            )
+            else -> throw Conflict(result.conflicts.size)
+        }
 
         var revision = remote.revision
         if (merged != remoteEntries) {

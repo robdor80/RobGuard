@@ -10,6 +10,38 @@ internal object VaultMerge {
         val canPublish: Boolean get() = conflicts.isEmpty()
     }
 
+    /**
+     * Resolución voluntaria y sin pérdida: conserva la versión remota
+     * y añade la versión local con otro ID para revisión posterior.
+     * El caso editar/borrar recupera la versión editada.
+     */
+    fun resolveKeepingCopies(
+        baseline: List<VaultEntry>, local: List<VaultEntry>, remote: List<VaultEntry>,
+        newId: () -> String = { java.util.UUID.randomUUID().toString() }
+    ): List<VaultEntry> {
+        val attempt = merge(baseline, local, remote)
+        if (attempt.canPublish) return attempt.merged
+        val resolved = attempt.merged.toMutableList()
+        val localMap = local.associateBy { it.id }
+        val remoteMap = remote.associateBy { it.id }
+        val usedIds = (baseline + local + remote).map { it.id }.toMutableSet()
+        for (id in attempt.conflicts.sorted()) {
+            remoteMap[id]?.let { resolved += it }
+            localMap[id]?.let { entry ->
+                val cloneId = newId()
+                require(cloneId.isNotBlank() && cloneId.length <= 80 &&
+                    usedIds.add(cloneId)) { "ID de copia no válido" }
+                val suffix = " (copia local)"
+                resolved += entry.copy(
+                    id = cloneId,
+                    title = entry.title.take(200 - suffix.length) + suffix
+                ).validate()
+            }
+        }
+        require(resolved.map { it.id }.toSet().size == resolved.size)
+        return resolved
+    }
+
     fun merge(
         baseline: List<VaultEntry>,
         local: List<VaultEntry>,

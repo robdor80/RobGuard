@@ -53,6 +53,7 @@ class MainActivity : FragmentActivity() {
         }
     }
     private var cloudPaired by mutableStateOf(false)
+    private var cloudConflict by mutableStateOf(false)
     private var cloudBusy by mutableStateOf(false)
     private var cloudStatus by mutableStateOf("Sólo almacenamiento local")
     private var recoveryCode by mutableStateOf<String?>(null)
@@ -98,6 +99,8 @@ class MainActivity : FragmentActivity() {
                 onConnectGoogle = ::connectGoogle,
                 onDisconnectGoogle = ::disconnectGoogle,
                 cloudPaired = cloudPaired,
+                cloudConflict = cloudConflict,
+                onResolveConflicts = ::resolveCloudConflicts,
                 cloudBusy = cloudBusy,
                 cloudStatus = cloudStatus,
                 recoveryCode = recoveryCode,
@@ -419,15 +422,40 @@ class MainActivity : FragmentActivity() {
                 if (session === active && unlocked) {
                     records = result.entries
                     cloudStatus = "Sincronizado · revisión ${result.revision}"
+                    cloudConflict = false
                     message = null
                 }
             } catch (conflict: CloudVaultService.Conflict) {
                 cloudStatus = "Conflicto pendiente"
+                cloudConflict = true
                 message = "Hay ${conflict.count} registro(s) modificados en ambos " +
                     "dispositivos. No se ha sobrescrito ninguna versión."
             } catch (_: Exception) {
                 cloudStatus = "Sin conexión o sincronización pendiente"
                 message = "No se pudo sincronizar. Los cambios locales se han conservado."
+            } finally {
+                cloudBusy = false
+            }
+        }
+    }
+
+    private fun resolveCloudConflicts() {
+        val active = session?.takeIf { unlocked && it.isOpen } ?: return
+        if (!cloudConflict || cloudBusy || !hasValidatedNetwork()) return
+        cloudBusy = true
+        cloudStatus = "Conservando las versiones en conflicto…"
+        lifecycleScope.launch {
+            try {
+                val result = cloud.synchronize(active, preserveConflictsAsCopies = true)
+                if (session === active && unlocked) {
+                    records = result.entries
+                    cloudConflict = false
+                    cloudStatus = "Ambas versiones conservadas · revisión ${result.revision}"
+                    message = null
+                }
+            } catch (_: Exception) {
+                message = "No se pudo resolver el conflicto. No se ha sobrescrito la bóveda."
+                cloudStatus = "Conflicto pendiente"
             } finally {
                 cloudBusy = false
             }
