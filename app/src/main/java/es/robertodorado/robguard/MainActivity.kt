@@ -12,6 +12,7 @@ import android.os.Looper
 import android.os.PersistableBundle
 import android.view.WindowManager
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 import androidx.compose.runtime.getValue
@@ -34,6 +35,12 @@ class MainActivity : FragmentActivity() {
     private val idleTimeout = Runnable { lockVault() }
     private var clipboardToken: String? = null
     private var started = false
+    private val legacyCredentialLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == RESULT_OK && started) openAuthorizedVault()
+        else if (started) message = "No se ha completado la autenticación."
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -81,39 +88,37 @@ class MainActivity : FragmentActivity() {
             message = "Para proteger la bóveda, activa primero un PIN, patrón o contraseña en Android."
             return
         }
-        val authenticators = BiometricManager.Authenticators.BIOMETRIC_STRONG or
-            BiometricManager.Authenticators.DEVICE_CREDENTIAL
+        message = null
+        val modern = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
+        val authenticators = if (modern) {
+            BiometricManager.Authenticators.BIOMETRIC_STRONG or
+                BiometricManager.Authenticators.DEVICE_CREDENTIAL
+        } else {
+            BiometricManager.Authenticators.BIOMETRIC_STRONG
+        }
         val manager = BiometricManager.from(this)
-        if (manager.canAuthenticate(authenticators) != BiometricManager.BIOMETRIC_SUCCESS) {
+        if (!modern && manager.canAuthenticate(authenticators) != BiometricManager.BIOMETRIC_SUCCESS) {
+            requestLegacyCredential()
+            return
+        }
+        if (modern && manager.canAuthenticate(authenticators) != BiometricManager.BIOMETRIC_SUCCESS) {
             message = "Android no permite la autenticación segura configurada en este dispositivo."
             return
         }
-        message = null
         val prompt = BiometricPrompt(
             this,
             ContextCompat.getMainExecutor(this),
             object : BiometricPrompt.AuthenticationCallback() {
                 override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
                     super.onAuthenticationSucceeded(result)
-                    if (!started) return
-                    try {
-                        val opened = storage.openAfterAuthentication()
-                        session?.close()
-                        session = opened
-                        records = opened.records
-                        unlocked = true
-                        message = null
-                        armIdleTimeout()
-                    } catch (_: Exception) {
-                        lockVault()
-                        message = "No se ha podido abrir la bóveda. No se han eliminado datos. " +
-                            "Comprueba el bloqueo del dispositivo y evita reinstalar la aplicación."
-                    }
+                    if (started) openAuthorizedVault()
                 }
 
                 override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
                     super.onAuthenticationError(errorCode, errString)
-                    if (errorCode != BiometricPrompt.ERROR_USER_CANCELED &&
+                    if (!modern && errorCode == BiometricPrompt.ERROR_NEGATIVE_BUTTON) {
+                        requestLegacyCredential()
+                    } else if (errorCode != BiometricPrompt.ERROR_USER_CANCELED &&
                         errorCode != BiometricPrompt.ERROR_NEGATIVE_BUTTON &&
                         errorCode != BiometricPrompt.ERROR_CANCELED) {
                         message = "Autenticación no completada. Inténtalo de nuevo."
@@ -121,12 +126,41 @@ class MainActivity : FragmentActivity() {
                 }
             }
         )
-        val info = BiometricPrompt.PromptInfo.Builder()
+        val builder = BiometricPrompt.PromptInfo.Builder()
             .setTitle("Desbloquear RobGuard")
             .setSubtitle("Accede a tu bóveda cifrada")
             .setAllowedAuthenticators(authenticators)
-            .build()
-        prompt.authenticate(info)
+        if (!modern) builder.setNegativeButtonText("Usar PIN o patrón")
+        prompt.authenticate(builder.build())
+    }
+
+    private fun requestLegacyCredential() {
+        val keyguard = getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
+        val intent = keyguard.createConfirmDeviceCredentialIntent(
+            "Desbloquear RobGuard", "Confirma la identidad del dispositivo"
+        )
+        if (intent == null) {
+            message = "No está disponible una credencial segura del dispositivo."
+        } else {
+            legacyCredentialLauncher.launch(intent)
+        }
+    }
+
+    private fun openAuthorizedVault() {
+        if (!started) return
+        try {
+            val opened = storage.openAfterAuthentication()
+            session?.close()
+            session = opened
+            records = opened.records
+            unlocked = true
+            message = null
+            armIdleTimeout()
+        } catch (_: Exception) {
+            lockVault()
+            message = "No se ha podido abrir la bóveda. No se han eliminado datos. " +
+                "Comprueba el bloqueo del dispositivo y evita reinstalar la aplicación."
+        }
     }
 
     private fun saveEntry(entry: VaultEntry): Boolean {
