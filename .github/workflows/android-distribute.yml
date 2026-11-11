@@ -1,0 +1,27 @@
+name: Android distribution (RobPublisher)
+
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        type: choice
+        description: Solo versiones oficiales
+        options: [release]
+        default: release
+
+permissions:
+  contents: read
+  actions: read
+  deployments: read
+
+jobs:
+  distribute:
+    uses: robdor80/RobStore/.github/workflows/android-distribution-engine.yml@main
+    secrets: inherit
+    permissions:
+      contents: write
+      actions: read
+      deployments: read
+    with:
+      source_sha: ${{ github.sha }}
+      channel: release
