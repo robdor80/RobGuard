@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "sourceCommit": "9b0b944353424fac9a75c5e60a540af80687e6fe",
+  "channel": "release",
+  "certificateSha256": "db5ea01720b90794c2ab0f9041afa9b0cebb2e75b045d0e4e6522d6982de5264",
+  "apkSha256": "e12985f0809637744453cf3dccf69547683bb2e22092f72d3f4c407a807a72f2",
+  "repository": "robdor80/RobGuard",
+  "preparationRun": "43086622717",
+  "tag": "v0.2.1-3"
+}
