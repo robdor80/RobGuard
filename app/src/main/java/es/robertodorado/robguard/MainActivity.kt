@@ -60,8 +60,9 @@ class MainActivity : FragmentActivity() {
     }
 
     override fun onStart() {
-        super.onStart()
+        // El resultado de PIN/patrón puede despacharse dentro de super.onStart().
         started = true
+        super.onStart()
     }
 
     override fun onStop() {
