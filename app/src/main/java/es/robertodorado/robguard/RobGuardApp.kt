@@ -101,8 +101,8 @@ internal fun RobGuardApp(
             key("vault-unlocked") {
                 UnlockedApp(entries, message, onLock, onSave, onDelete, onCopy,
                     googleConfigured, googleAccount, onConnectGoogle, onDisconnectGoogle,
-                    cloudPaired, cloudBusy, cloudStatus, recoveryCode,
-                    cloudConflict, onResolveConflicts,
+                    cloudPaired, cloudConflict, onResolveConflicts,
+                    cloudBusy, cloudStatus, recoveryCode,
                     onPrepareBackup, onConfirmBackup, onCancelBackup, onRecover, onSyncCloud)
             }
         } else {
@@ -256,8 +256,8 @@ private fun UnlockedApp(
                     }
                     GuardSection.SETTINGS -> SettingsContent(onLock,
                         googleConfigured, googleAccount, onConnectGoogle, onDisconnectGoogle,
-                        cloudPaired, cloudBusy, cloudStatus, recoveryCode,
-                        cloudConflict, onResolveConflicts,
+                        cloudPaired, cloudConflict, onResolveConflicts,
+                        cloudBusy, cloudStatus, recoveryCode,
                         onPrepareBackup, onConfirmBackup, onCancelBackup, onRecover, onSyncCloud)
                 }
             }
@@ -494,6 +494,8 @@ private fun SettingsContent(
     onConnectGoogle: () -> Unit,
     onDisconnectGoogle: () -> Unit,
     cloudPaired: Boolean,
+    cloudConflict: Boolean,
+    onResolveConflicts: () -> Unit,
     cloudBusy: Boolean,
     cloudStatus: String,
     recoveryCode: String?,
