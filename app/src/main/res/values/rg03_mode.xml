@@ -1,6 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Cambiar SOLO tras migrar datos, reglas e inscripción inicial.
-         false conserva la sincronización RG-02 en las builds de desarrollo. -->
-    <bool name="rg03_device_access_enabled">false</bool>
+    <!-- Release candidata RG-04/P04. NO FUSIONAR/PUBLICAR sin:
+         1) cuenta Google RG-02 y recuperación externa verificadas,
+         2) Firebase Auth Anonymous activado,
+         3) firestore.rg03.preparation.rules desplegadas TEMPORALMENTE,
+         4) plan de aprobación inicial Realme desde Firebase Console.
+         Las reglas finales SOLO se desplegarán tras verificar que
+         el primer Realme está autorizado y sincroniza correctamente. -->
+    <bool name="rg03_device_access_enabled">true</bool>
 </resources>
