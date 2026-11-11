@@ -1,0 +1,72 @@
+package es.robertodorado.robguard.vault
+
+import org.junit.Assert.*
+import org.junit.Test
+
+class VaultMergeTest {
+    private fun record(id: String, password: String = "p") =
+        VaultEntry(id, id, "user", password, "", "", "", 1, 1)
+
+    @Test fun independentOfflineEditsMerge() {
+        val base = listOf(record("a"), record("b"))
+        val local = listOf(record("a", "local"), record("b"))
+        val remote = listOf(record("a"), record("b", "remote"))
+        val result = VaultMerge.merge(base, local, remote)
+        assertTrue(result.canPublish)
+        assertEquals("local", result.merged.first { it.id == "a" }.password)
+        assertEquals("remote", result.merged.first { it.id == "b" }.password)
+    }
+
+    @Test fun deletionWinsOverUnchangedRecord() {
+        val base = listOf(record("a"))
+        val result = VaultMerge.merge(base, emptyList(), base)
+        assertTrue(result.canPublish)
+        assertTrue(result.merged.isEmpty())
+    }
+
+    @Test fun deleteVersusEditMustNotSilentlyResurrect() {
+        val base = listOf(record("a"))
+        val result = VaultMerge.merge(base, emptyList(), listOf(record("a", "remote")))
+        assertFalse(result.canPublish)
+        assertEquals(setOf("a"), result.conflicts)
+    }
+
+    @Test fun divergentConcurrentEditMustNotChooseLastWriter() {
+        val base = listOf(record("a"))
+        val result = VaultMerge.merge(base, listOf(record("a", "local")),
+            listOf(record("a", "remote")))
+        assertFalse(result.canPublish)
+    }
+
+    @Test fun twoConflictingEditsPreserveBoth() {
+        val base = listOf(record("a"))
+        val ours = listOf(record("a", "mobile"))
+        val theirs = listOf(record("a", "tablet"))
+        val result = VaultMerge.resolveKeepingCopies(base, ours, theirs) { "new-a" }
+        assertEquals(2, result.size)
+        assertEquals("tablet", result.single { it.id == "a" }.password)
+        assertEquals("mobile", result.single { it.id == "new-a" }.password)
+        assertTrue(result.single { it.id == "new-a" }.title.endsWith("(copia local)"))
+    }
+
+    @Test fun conflictingDeletionVersusModificationRetainsEditedVersion() {
+        val base = listOf(record("a"))
+        val ours = emptyList<VaultEntry>()
+        val theirs = listOf(record("a", "tablet"))
+        val resolved = VaultMerge.resolveKeepingCopies(base, ours, theirs) { "unused" }
+        assertEquals(theirs, resolved)
+    }
+
+    @Test fun sameEditsDoNotConflict() {
+        val base = listOf(record("a"))
+        val both = listOf(record("a", "same"))
+        assertEquals(both, VaultMerge.merge(base, both, both).merged)
+    }
+
+    @Test fun brandNewIndependentRecordsMergeAndDoubleCreateConflicts() {
+        assertEquals(2, VaultMerge.merge(emptyList(), listOf(record("a")),
+            listOf(record("b"))).merged.size)
+        assertFalse(VaultMerge.merge(emptyList(), listOf(record("a", "x")),
+            listOf(record("a", "y"))).canPublish)
+    }
+}

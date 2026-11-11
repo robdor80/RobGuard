@@ -78,13 +78,32 @@ internal fun RobGuardApp(
     onLock: () -> Unit,
     onSave: (VaultEntry) -> Boolean,
     onDelete: (String) -> Boolean,
-    onCopy: (String) -> Unit
+    onCopy: (String) -> Unit,
+    googleConfigured: Boolean = false,
+    googleAccount: String? = null,
+    onConnectGoogle: () -> Unit = {},
+    onDisconnectGoogle: () -> Unit = {},
+    cloudPaired: Boolean = false,
+    cloudConflict: Boolean = false,
+    onResolveConflicts: () -> Unit = {},
+    cloudBusy: Boolean = false,
+    cloudStatus: String = "Sólo almacenamiento local",
+    recoveryCode: String? = null,
+    onPrepareBackup: () -> Unit = {},
+    onConfirmBackup: () -> Unit = {},
+    onCancelBackup: () -> Unit = {},
+    onRecover: (String) -> Unit = {},
+    onSyncCloud: () -> Unit = {}
 ) {
     MaterialTheme(colorScheme = Palette) {
         if (unlocked) {
             // Al bloquear se elimina TODO este subárbol y sus campos sensibles.
             key("vault-unlocked") {
-                UnlockedApp(entries, message, onLock, onSave, onDelete, onCopy)
+                UnlockedApp(entries, message, onLock, onSave, onDelete, onCopy,
+                    googleConfigured, googleAccount, onConnectGoogle, onDisconnectGoogle,
+                    cloudPaired, cloudConflict, onResolveConflicts,
+                    cloudBusy, cloudStatus, recoveryCode,
+                    onPrepareBackup, onConfirmBackup, onCancelBackup, onRecover, onSyncCloud)
             }
         } else {
             LockedApp(message, onUnlock)
@@ -152,7 +171,22 @@ private fun UnlockedApp(
     onLock: () -> Unit,
     onSave: (VaultEntry) -> Boolean,
     onDelete: (String) -> Boolean,
-    onCopy: (String) -> Unit
+    onCopy: (String) -> Unit,
+    googleConfigured: Boolean,
+    googleAccount: String?,
+    onConnectGoogle: () -> Unit,
+    onDisconnectGoogle: () -> Unit,
+    cloudPaired: Boolean,
+    cloudConflict: Boolean,
+    onResolveConflicts: () -> Unit,
+    cloudBusy: Boolean,
+    cloudStatus: String,
+    recoveryCode: String?,
+    onPrepareBackup: () -> Unit,
+    onConfirmBackup: () -> Unit,
+    onCancelBackup: () -> Unit,
+    onRecover: (String) -> Unit,
+    onSyncCloud: () -> Unit
 ) {
     var section by remember { mutableStateOf(GuardSection.VAULT) }
     var selected by remember { mutableStateOf<VaultEntry?>(null) }
@@ -220,7 +254,11 @@ private fun UnlockedApp(
                             )
                         }
                     }
-                    GuardSection.SETTINGS -> SettingsContent(onLock)
+                    GuardSection.SETTINGS -> SettingsContent(onLock,
+                        googleConfigured, googleAccount, onConnectGoogle, onDisconnectGoogle,
+                        cloudPaired, cloudConflict, onResolveConflicts,
+                        cloudBusy, cloudStatus, recoveryCode,
+                        onPrepareBackup, onConfirmBackup, onCancelBackup, onRecover, onSyncCloud)
                 }
             }
         }
@@ -449,14 +487,129 @@ private fun passwordQuality(password: String): String {
 }
 
 @Composable
-private fun SettingsContent(onLock: () -> Unit) {
+private fun SettingsContent(
+    onLock: () -> Unit,
+    googleConfigured: Boolean,
+    googleAccount: String?,
+    onConnectGoogle: () -> Unit,
+    onDisconnectGoogle: () -> Unit,
+    cloudPaired: Boolean,
+    cloudConflict: Boolean,
+    onResolveConflicts: () -> Unit,
+    cloudBusy: Boolean,
+    cloudStatus: String,
+    recoveryCode: String?,
+    onPrepareBackup: () -> Unit,
+    onConfirmBackup: () -> Unit,
+    onCancelBackup: () -> Unit,
+    onRecover: (String) -> Unit,
+    onSyncCloud: () -> Unit
+) {
+    var showRecoveryInput by remember { mutableStateOf(false) }
+    var enteredRecoveryCode by remember { mutableStateOf("") }
+    var confirmedCodeCopy by remember(recoveryCode) { mutableStateOf(false) }
     Text("Ajustes", style = MaterialTheme.typography.headlineMedium)
     InfoCard("Cifrado", "AES-256-GCM. Clave local protegida por Android Keystore.")
     InfoCard("Bloqueo", "Biometría o credencial de pantalla; bloqueo al salir o tras 2 minutos sin uso.")
     InfoCard("Copiar", "RobGuard intenta limpiar su copia a los 30 segundos y al volver a la app. " +
         "Android puede impedir comprobar el portapapeles en segundo plano.")
-    InfoCard("Recuperación y nube", "RG-02 añadirá cuenta Google y sincronización cifrada. " +
-        "RG-01 no permite recuperar una bóveda de un dispositivo perdido.")
+    InfoCard("Google y Firebase", when {
+        !googleConfigured -> "Pendiente de configurar Firebase para la Release oficial."
+        googleAccount != null -> "Cuenta autorizada: $googleAccount. " +
+            if (cloudPaired) "Vinculación cifrada activa." else "Copia aún no vinculada."
+        else -> "Conecta la única cuenta Google autorizada. La bóveda seguirá siendo local."
+    })
+    if (googleAccount == null) {
+        Button(onClick = onConnectGoogle, enabled = googleConfigured) {
+            Text("Conectar cuenta Google")
+        }
+    } else {
+        TextButton(onClick = onDisconnectGoogle) { Text("Desconectar Google") }
+    }
+    InfoCard("Sincronización cifrada", cloudStatus)
+    if (cloudConflict) {
+        InfoCard("Conflicto entre dispositivos", "Hay modificaciones simultáneas. " +
+            "Puedes conservar las dos versiones con nombres distintos para " +
+            "revisarlas. Las eliminaciones enfrentadas a ediciones conservarán " +
+            "la versión editada.")
+        Button(onClick = onResolveConflicts, enabled = !cloudBusy) {
+            Text("Conservar versiones en conflicto")
+        }
+    }
+    if (googleAccount != null) {
+        if (cloudPaired) {
+            Button(onClick = onSyncCloud, enabled = !cloudBusy) { Text("Sincronizar ahora") }
+        } else {
+            Button(onClick = onPrepareBackup, enabled = !cloudBusy) {
+                Text("Activar copia cifrada")
+            }
+            TextButton(onClick = { showRecoveryInput = true }, enabled = !cloudBusy) {
+                Text("Recuperar bóveda desde otro dispositivo")
+            }
+        }
+    } else {
+        InfoCard("Sin conexión Google", "Los cambios se guardan localmente y cifrados.")
+    }
+    if (recoveryCode != null) {
+        AlertDialog(
+            onDismissRequest = onCancelBackup,
+            title = { Text("Guarda tu código de recuperación") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("Sin este código no podrás recuperar la bóveda en otro dispositivo. " +
+                        "Google no puede proporcionártelo. Guárdalo fuera del móvil.")
+                    Text(recoveryCode, color = Cyan)
+                    Checkbox(checked = confirmedCodeCopy,
+                        onCheckedChange = { confirmedCodeCopy = it })
+                    Text("He guardado el código fuera de RobGuard")
+                }
+            },
+            confirmButton = {
+                Button(onClick = onConfirmBackup, enabled = confirmedCodeCopy && !cloudBusy) {
+                    Text("Crear copia cifrada")
+                }
+            },
+            dismissButton = { TextButton(onClick = onCancelBackup) { Text("Cancelar") } }
+        )
+    }
+    if (showRecoveryInput) {
+        AlertDialog(
+            onDismissRequest = {
+                enteredRecoveryCode = ""
+                showRecoveryInput = false
+            },
+            title = { Text("Recuperar copia cifrada") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("Solo sobre una bóveda local vacía. Requiere cuenta Google " +
+                        "autorizada y autenticación reciente del dispositivo.")
+                    OutlinedTextField(
+                        value = enteredRecoveryCode,
+                        onValueChange = { enteredRecoveryCode = it },
+                        label = { Text("Código de recuperación") },
+                        visualTransformation = PasswordVisualTransformation(),
+                        singleLine = true, modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(onClick = {
+                    val code = enteredRecoveryCode
+                    enteredRecoveryCode = ""
+                    showRecoveryInput = false
+                    onRecover(code)
+                }, enabled = enteredRecoveryCode.isNotBlank() && !cloudBusy) {
+                    Text("Recuperar")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    enteredRecoveryCode = ""
+                    showRecoveryInput = false
+                }) { Text("Cancelar") }
+            }
+        )
+    }
     InfoCard("Distribución", "Sólo RobPublisher → RS-05 → GitHub Release → RobStore.")
     Button(onClick = onLock) { Text("Bloquear ahora") }
 }

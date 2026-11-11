@@ -1,0 +1,31 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /vaults/{userId} {
+      // Acceso exclusivo al UID propietario ya verificado mediante Google.
+      function isOwner() {
+        return request.auth != null
+          && userId == 'wNVy8SirO8RZi8PvffWER0wRqrj2'
+          && request.auth.uid == 'wNVy8SirO8RZi8PvffWER0wRqrj2';
+      }
+      function validCiphertext() {
+        return request.resource.data.keys().hasOnly([
+          'schema', 'revision', 'entries', 'wrappedDek'
+        ])
+        && request.resource.data.schema == 2
+        && request.resource.data.revision is int
+        && request.resource.data.entries is string
+        && request.resource.data.wrappedDek is string
+        && request.resource.data.entries.size() < 800000
+        && request.resource.data.wrappedDek.size() < 2048;
+      }
+      allow read: if isOwner();
+      allow create: if isOwner() && validCiphertext()
+        && request.resource.data.revision == 1;
+      allow update: if isOwner() && validCiphertext()
+        && request.resource.data.revision == resource.data.revision + 1
+        && request.resource.data.wrappedDek == resource.data.wrappedDek;
+      allow delete: if false;
+    }
+  }
+}
