@@ -1,18 +1,24 @@
-# RobGuard 0.1.0 — Primera versión oficial
+# RobGuard 0.2.0 — Autorización individual de dispositivos (RG-03)
 
-Primera publicación de RobGuard para Android, distribuida por RobPublisher y el motor RS-05, con instalación desde RobStore.
+**Versión candidata, NO publicar hasta finalizar la preparación de Firebase indicada en `docs/RG-03-MIGRACION.md`.**
 
-## Funciones incluidas
-- Bóveda de contraseñas cifrada localmente con Android Keystore y AES-256-GCM.
-- Creación, consulta, edición, búsqueda, eliminación y generación de contraseñas.
-- Desbloqueo mediante autenticación del dispositivo y bloqueo de la bóveda.
-- Vinculación de la única cuenta Google autorizada.
-- Copia, recuperación mediante código y sincronización cifrada con Firebase (RG-02).
+## Novedades
+- Identidad de instalación separada de la cuenta Google del propietario.
+- Inventario de dispositivos registrados y estados pendientes/autorizados.
+- Aprobación de dispositivos adicionales desde un dispositivo ya autorizado.
+- Revocación del acceso a la bóveda de Firebase por instalación.
+- Solicitud de borrado local diferido cuando una instalación revocada vuelva a ejecutar RobGuard con conexión.
 
-## Seguridad y límites de esta versión
-- La nueva gestión de dispositivos, revocación y borrado diferido (RG-03) está incorporada al código, pero **DESACTIVADA** en esta primera publicación. Se habilitará tras la migración de Firebase y pruebas físicas controladas.
-- La primera instalación se dedica a comprobaciones reales en el Realme GT Neo 2. No utilizar RobGuard como única copia de contraseñas reales hasta certificar la restauración y sincronización entre dispositivos.
-- Las reglas de Firebase en producción no se modifican al publicar esta versión.
-- La instalación puede requerir confirmación de Android. No se promete instalación silenciosa.
+## Migración segura desde 0.1.0
+- Esta versión activa el modo RG-03. **Antes de publicarla**, el propietario debe habilitar Firebase Auth Anonymous y desplegar temporalmente `firestore.rg03.preparation.rules`.
+- El Realme debe aparecer inicialmente como `pending` y ser autorizado una sola vez mediante Firebase Console.
+- Después de verificar que la instalación autorizada puede sincronizar, sustituir las reglas temporales por **`firestore.rg03.rules` finales**.
+- No borrar ni reinstalar RobGuard: la actualización conserva la bóveda local y sus datos cuando Android reconoce el mismo paquete y certificado.
+- Durante las reglas temporales la sesión Google antigua sigue permitida y la revocación aún no está garantizada.
+- El borrado remoto requiere que la aplicación revocada vuelva a ejecutarse online; no se garantiza eliminación física ni acceso a un dispositivo apagado.
+- La autorización utiliza credenciales Firebase por instalación, no una prueba hardware intransferible.
 
-Paquete oficial: `es.robertodorado.robguard`. Versión `0.1.0`, código `1`. Se requiere conservar el certificado Release original para todas las actualizaciones.
+## Publicación oficial
+Solo mediante **RobPublisher → RS-05 → GitHub Release → RobStore**, conservando `es.robertodorado.robguard` y el certificado Release original. `versionCode=2`, `versionName=0.2.0`.
+
+No utilizar contraseñas reales como única copia hasta certificar recuperación y revocación física en la tablet.
