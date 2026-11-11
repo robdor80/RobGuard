@@ -31,6 +31,8 @@ class DeviceLifecycleTest {
         assertTrue(DeviceLifecycle.acceptsVerifiedTransition(
             DeviceStatus.AUTHORIZED, DeviceStatus.REVOKE_PENDING))
         assertTrue(DeviceLifecycle.acceptsVerifiedTransition(
+            DeviceStatus.AUTHORIZED, DeviceStatus.REVOKED))
+        assertTrue(DeviceLifecycle.acceptsVerifiedTransition(
             DeviceStatus.REVOKE_PENDING, DeviceStatus.REVOKED))
         assertTrue(DeviceLifecycle.acceptsVerifiedTransition(
             DeviceStatus.REVOKED, DeviceStatus.WIPE_CONFIRMED))
@@ -40,7 +42,7 @@ class DeviceLifecycleTest {
         assertFalse(DeviceLifecycle.acceptsVerifiedTransition(
             DeviceStatus.AUTHORIZED, DeviceStatus.WIPE_CONFIRMED))
         assertFalse(DeviceLifecycle.acceptsVerifiedTransition(
-            DeviceStatus.AUTHORIZED, DeviceStatus.REVOKED))
+            DeviceStatus.REVOKE_PENDING, DeviceStatus.WIPE_CONFIRMED))
         assertFalse(DeviceLifecycle.acceptsVerifiedTransition(
             DeviceStatus.PENDING, DeviceStatus.WIPE_CONFIRMED))
         DeviceStatus.entries.forEach {
