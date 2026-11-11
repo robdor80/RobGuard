@@ -1,7 +1,12 @@
 #!/usr/bin/env python3
-"""Comprobaciones mínimas RS-05, sin claves ni red."""
+"""Comprobaciones mínimas RS-05 de RobGuard, sin claves ni red.
+
+Se acepta cualquier versionCode entero positivo: RS-05 exige incrementarlo
+en cada nueva Release; fijarlo a 1 impediría las actualizaciones legítimas.
+"""
 import json
 import pathlib
+import re
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 config = json.loads((ROOT / ".github/android-distribution.json").read_text("utf-8"))
@@ -20,5 +25,7 @@ assert "secrets: inherit" in workflow
 gradle = (ROOT / "app/build.gradle.kts").read_text("utf-8")
 assert 'applicationId = "es.robertodorado.robguard"' in gradle
 assert 'applicationIdSuffix = ".debug"' in gradle
-assert "versionCode = 1" in gradle
-print("RG-00: identidad Android y contrato RS-05 presentes.")
+match = re.search(r"(?m)^\s*versionCode\s*=\s*(\d+)\s*$", gradle)
+assert match is not None and int(match.group(1)) > 0, "versionCode inválido"
+assert re.search(r'(?m)^\s*versionName\s*=\s*"[^"]+"\s*$', gradle), "versionName ausente"
+print(f"RobGuard: identidad Android y RS-05 válidos (versionCode={match.group(1)}).")
