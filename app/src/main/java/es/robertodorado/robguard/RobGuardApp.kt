@@ -323,7 +323,7 @@ private fun EntryForm(
             Text(if (showGenerator) "Cerrar generador" else "Generar contraseña")
         }
         if (password.isNotEmpty()) {
-            TextButton(onClick = { onCopy(password) }) { Text("Copiar (30 s)") }
+            TextButton(onClick = { onCopy(password) }) { Text("Copiar") }
         }
     }
     if (showGenerator) {
@@ -453,8 +453,8 @@ private fun SettingsContent(onLock: () -> Unit) {
     Text("Ajustes", style = MaterialTheme.typography.headlineMedium)
     InfoCard("Cifrado", "AES-256-GCM. Clave local protegida por Android Keystore.")
     InfoCard("Bloqueo", "Biometría o credencial de pantalla; bloqueo al salir o tras 2 minutos sin uso.")
-    InfoCard("Copiar", "Las contraseñas copiadas se borran del portapapeles después de 30 segundos, " +
-        "si ninguna otra aplicación las ha sustituido.")
+    InfoCard("Copiar", "RobGuard intenta limpiar su copia a los 30 segundos y al volver a la app. " +
+        "Android puede impedir comprobar el portapapeles en segundo plano.")
     InfoCard("Recuperación y nube", "RG-02 añadirá cuenta Google y sincronización cifrada. " +
         "RG-01 no permite recuperar una bóveda de un dispositivo perdido.")
     InfoCard("Distribución", "Sólo RobPublisher → RS-05 → GitHub Release → RobStore.")
