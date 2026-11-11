@@ -527,12 +527,17 @@ class MainActivity : FragmentActivity() {
         deviceCheckInProgress = true
         lifecycleScope.launch {
             try {
-                val info = try {
-                    // La orden de revocación se consulta sin depender de Google.
+                val info = if (ownerAuth.authorizedUid != null &&
+                    deviceAuthorization.thisDeviceUid == null
+                ) {
+                    // Primera instalación: crear propuesta sin privilegios.
+                    deviceAuthorization.registerIfNeeded()
+                } else try {
+                    // La revocación se consulta incluso tras cerrar Google.
                     deviceAuthorization.refreshMine()
                 } catch (_: IllegalStateException) {
                     if (ownerAuth.authorizedUid == null) throw IllegalStateException(
-                        "Primero conecta la cuenta propietaria para registrar la instalación"
+                        "Conecta la cuenta propietaria para registrar esta instalación"
                     )
                     deviceAuthorization.registerIfNeeded()
                 }
