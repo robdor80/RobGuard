@@ -49,7 +49,8 @@ const button = document.getElementById("connect");
           result.appendChild(explanation);
         } catch (e) {
           result.textContent = "No se completó el acceso. Código: " + (e?.code || "desconocido") +
-            ". Revisa el dominio autorizado y las ventanas emergentes del navegador.";
+            ". Detalle: " + (e?.message || "sin detalles") +
+            ". Si vuelve a ocurrir, comparte una captura de esta pantalla (sin credenciales).";
         } finally { button.disabled = false; }
       });
     } catch (e) {
