@@ -26,6 +26,25 @@ internal class VaultStorage(context: Context) {
     private val wrappedKeyFile = AtomicFile(File(directory, "key.rg01"))
     private val entriesFile = AtomicFile(File(directory, "entries.rg01"))
 
+    /**
+     * Preparar la KEK ANTES del diálogo de autenticación: así el token concedido
+     * por Android corresponde a una clave que ya existe. Nunca sobrescribir
+     * una bóveda ni sustituir una clave existente.
+     */
+    fun prepareForAuthentication() {
+        checkDeviceSecurity()
+        val hasKeyFile = wrappedKeyFile.baseFile.exists()
+        val hasRecords = entriesFile.baseFile.exists()
+        check(hasKeyFile == hasRecords) {
+            "Bóveda incompleta. No se han tocado los ficheros."
+        }
+        if (hasKeyFile) return
+        val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+        if (!store.containsAlias(ALIAS)) {
+            createDeviceKey()
+        }
+    }
+
     fun openAfterAuthentication(): VaultSession {
         checkDeviceSecurity()
         val keyExists = wrappedKeyFile.baseFile.exists()
@@ -53,13 +72,11 @@ internal class VaultStorage(context: Context) {
     }
 
     private fun createEmptyVault(): VaultSession {
-        val keyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
-        check(!keyStore.containsAlias(ALIAS)) {
-            "Hay una clave anterior sin ficheros. No se reiniciará automáticamente."
-        }
+        // La clave de este dispositivo debe haberse creado ANTES del prompt.
+        // Si un intento anterior falló antes de escribir datos, se reutiliza.
+        val kek = existingDeviceKey()
         val dek = VaultCrypto.newDataKey()
         try {
-            val kek = createDeviceKey()
             val wrapped = VaultCrypto.seal(kek, dek, KEY_PURPOSE)
             val serialized = encode(emptyList())
             try {
