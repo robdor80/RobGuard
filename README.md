@@ -2,14 +2,14 @@
 
 Gestor **personal** de contraseñas para Android, con acceso local sin conexión y sincronización cifrada prevista con Firebase.
 
-**Estado:** RG-00 — fundaciones y compatibilidad RS-05. El proyecto aún **no almacena contraseñas**, no autentica con Google ni sincroniza. No usar con credenciales reales hasta completar RG-01/RG-02.
+**Estado:** RG-01 en desarrollo (PR Draft). Hay bóveda cifrada local, CRUD, búsqueda, generador y desbloqueo del dispositivo. **Todavía no hay recuperación ni sincronización Firebase**. No usar como única copia de contraseñas reales hasta completar RG-02 y las pruebas de dispositivos.
 
 ## Decisiones
 
 - Kotlin + Jetpack Compose + Material 3, un módulo `app`.
 - Identidad oficial: `es.robertodorado.robguard` (Debug: `es.robertodorado.robguard.debug`).
 - SDK mínimo 26, SDK destino y compilación 36; Java 17.
-- La bóveda local se cifrará antes de guardar registros; Firebase solamente recibirá información cifrada.
+- La bóveda local usa AES-256-GCM y la clave se protege mediante Android Keystore. Firebase, cuando llegue RG-02, recibirá solamente información cifrada.
 - Acceso habitual por biometría, alta con la única cuenta Google autorizada y opción de revocar un dispositivo (en fases posteriores).
 - Los datos locales de RobGuard no se incluyen en las copias de seguridad automáticas de Android.
 - GitHub es público: jamás incluir contraseñas, claves privadas ni credenciales Firebase de servicio.
@@ -37,6 +37,6 @@ python3 tools/android_owner_setup.py --repository robdor80/RobGuard --catalog --
 
 El comando anterior pertenece al repositorio **RobStore**, no a este proyecto: ejecutarlo desde una copia de RobStore (o invocar su script por ruta). El asistente crea y protege la clave de firma en el dispositivo del propietario; no entregar keystores a una IA ni versionarlos. Añade el topic exacto `robstore-app`. Después de completar RG-04, RobPublisher podrá publicar una Release estable con un botón.
 
-Consulta [plan breve](docs/PLAN.md) y [contrato de distribución](docs/RS-05.md).
+Consulta [plan breve](docs/PLAN.md), [contrato de distribución](docs/RS-05.md) y [RG-01: seguridad y pruebas](docs/RG-01.md).
 
 La primera publicación oficial no debe hacerse hasta que estén terminadas y comprobadas la bóveda cifrada, la autenticación y la sincronización.
