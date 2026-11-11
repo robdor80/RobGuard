@@ -71,6 +71,8 @@ class MainActivity : FragmentActivity() {
     }
 
     override fun onDestroy() {
+        clipboardToken?.let(::clearOwnClipboard)
+        clipboardToken = null
         handler.removeCallbacksAndMessages(null)
         lockVault()
         super.onDestroy()
