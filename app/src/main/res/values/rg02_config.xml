@@ -3,9 +3,9 @@
     <!-- Identificadores públicos del CLIENTE, no claves de servicio.
          Sustituir antes de publicar RG-04, restringir API key a paquete y
          huella SHA de certificado Release en Google Cloud. -->
-    <string name="rg02_firebase_api_key" translatable="false">CONFIGURE_FIREBASE_API_KEY</string>
-    <string name="rg02_firebase_app_id" translatable="false">CONFIGURE_FIREBASE_APP_ID</string>
-    <string name="rg02_firebase_project_id" translatable="false">CONFIGURE_FIREBASE_PROJECT_ID</string>
-    <string name="rg02_google_web_client_id" translatable="false">CONFIGURE_GOOGLE_WEB_CLIENT_ID</string>
+    <string name="rg02_firebase_api_key" translatable="false">AIzaSyCOnLVJCDcwed0YVfRYgClQjexjebBHS1Q</string>
+    <string name="rg02_firebase_app_id" translatable="false">1:563441597098:android:b9589956c7af7025212ed3</string>
+    <string name="rg02_firebase_project_id" translatable="false">robguard-ed719</string>
+    <string name="rg02_google_web_client_id" translatable="false">563441597098-24q45hkj6j48j2ca2ruotbk4an6c7dug.apps.googleusercontent.com</string>
     <string name="rg02_owner_uid" translatable="false">CONFIGURE_OWNER_UID</string>
 </resources>
