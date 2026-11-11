@@ -129,7 +129,7 @@ private fun Header(locked: Boolean, onLock: () -> Unit = {}) {
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Image(
-            painter = painterResource(R.drawable.ic_robguard_foreground),
+            painter = painterResource(R.drawable.robguard_shield),
             contentDescription = null,
             modifier = Modifier.size(48.dp)
         )
@@ -156,7 +156,7 @@ private fun LockedApp(message: String?, onUnlock: () -> Unit) {
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(18.dp)
             ) {
-                Image(painter = painterResource(R.drawable.ic_robguard_foreground),
+                Image(painter = painterResource(R.drawable.robguard_shield),
                     contentDescription = null, modifier = Modifier.size(100.dp))
                 Text("Tu bóveda está bloqueada", style = MaterialTheme.typography.headlineSmall)
                 Text("Tus contraseñas están cifradas en este dispositivo. " +
