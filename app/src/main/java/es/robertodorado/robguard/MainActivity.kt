@@ -233,8 +233,8 @@ class MainActivity : FragmentActivity() {
 
     private fun lockVault() {
         handler.removeCallbacks(idleTimeout)
-        clipboardToken?.let(::clearOwnClipboard)
-        clipboardToken = null
+        // Al ir a otra app se bloquea la bóveda, pero debe quedar tiempo para pegar.
+        // El portapapeles sigue bajo el temporizador de 30 s independiente.
         session?.close()
         session = null
         records = emptyList()
