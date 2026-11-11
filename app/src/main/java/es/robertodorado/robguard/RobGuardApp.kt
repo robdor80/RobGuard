@@ -78,13 +78,18 @@ internal fun RobGuardApp(
     onLock: () -> Unit,
     onSave: (VaultEntry) -> Boolean,
     onDelete: (String) -> Boolean,
-    onCopy: (String) -> Unit
+    onCopy: (String) -> Unit,
+    googleConfigured: Boolean = false,
+    googleAccount: String? = null,
+    onConnectGoogle: () -> Unit = {},
+    onDisconnectGoogle: () -> Unit = {}
 ) {
     MaterialTheme(colorScheme = Palette) {
         if (unlocked) {
             // Al bloquear se elimina TODO este subárbol y sus campos sensibles.
             key("vault-unlocked") {
-                UnlockedApp(entries, message, onLock, onSave, onDelete, onCopy)
+                UnlockedApp(entries, message, onLock, onSave, onDelete, onCopy,
+                    googleConfigured, googleAccount, onConnectGoogle, onDisconnectGoogle)
             }
         } else {
             LockedApp(message, onUnlock)
@@ -152,7 +157,11 @@ private fun UnlockedApp(
     onLock: () -> Unit,
     onSave: (VaultEntry) -> Boolean,
     onDelete: (String) -> Boolean,
-    onCopy: (String) -> Unit
+    onCopy: (String) -> Unit,
+    googleConfigured: Boolean,
+    googleAccount: String?,
+    onConnectGoogle: () -> Unit,
+    onDisconnectGoogle: () -> Unit
 ) {
     var section by remember { mutableStateOf(GuardSection.VAULT) }
     var selected by remember { mutableStateOf<VaultEntry?>(null) }
@@ -220,7 +229,8 @@ private fun UnlockedApp(
                             )
                         }
                     }
-                    GuardSection.SETTINGS -> SettingsContent(onLock)
+                    GuardSection.SETTINGS -> SettingsContent(onLock,
+                        googleConfigured, googleAccount, onConnectGoogle, onDisconnectGoogle)
                 }
             }
         }
@@ -449,14 +459,32 @@ private fun passwordQuality(password: String): String {
 }
 
 @Composable
-private fun SettingsContent(onLock: () -> Unit) {
+private fun SettingsContent(
+    onLock: () -> Unit,
+    googleConfigured: Boolean,
+    googleAccount: String?,
+    onConnectGoogle: () -> Unit,
+    onDisconnectGoogle: () -> Unit
+) {
     Text("Ajustes", style = MaterialTheme.typography.headlineMedium)
     InfoCard("Cifrado", "AES-256-GCM. Clave local protegida por Android Keystore.")
     InfoCard("Bloqueo", "Biometría o credencial de pantalla; bloqueo al salir o tras 2 minutos sin uso.")
     InfoCard("Copiar", "RobGuard intenta limpiar su copia a los 30 segundos y al volver a la app. " +
         "Android puede impedir comprobar el portapapeles en segundo plano.")
-    InfoCard("Recuperación y nube", "RG-02 añadirá cuenta Google y sincronización cifrada. " +
-        "RG-01 no permite recuperar una bóveda de un dispositivo perdido.")
+    InfoCard("Google y Firebase", when {
+        !googleConfigured -> "Pendiente de configurar Firebase para la Release oficial."
+        googleAccount != null -> "Cuenta autorizada: $googleAccount. Aún no se han subido datos."
+        else -> "Conecta la única cuenta Google autorizada. La bóveda seguirá siendo local."
+    })
+    if (googleAccount == null) {
+        Button(onClick = onConnectGoogle, enabled = googleConfigured) {
+            Text("Conectar cuenta Google")
+        }
+    } else {
+        TextButton(onClick = onDisconnectGoogle) { Text("Desconectar Google") }
+    }
+    InfoCard("Sincronización cifrada", "RG-02 todavía no ha activado la copia en Firestore. " +
+        "No borres datos ni desinstales: la recuperación aún no está disponible.")
     InfoCard("Distribución", "Sólo RobPublisher → RS-05 → GitHub Release → RobStore.")
     Button(onClick = onLock) { Text("Bloquear ahora") }
 }

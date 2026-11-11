@@ -22,6 +22,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
+import androidx.lifecycle.lifecycleScope
+import es.robertodorado.robguard.cloud.GoogleOwnerAuth
+import kotlinx.coroutines.launch
 import es.robertodorado.robguard.vault.VaultEntry
 import es.robertodorado.robguard.vault.VaultSession
 import es.robertodorado.robguard.vault.VaultStorage
@@ -29,6 +32,8 @@ import java.util.UUID
 
 class MainActivity : FragmentActivity() {
     private val storage by lazy { VaultStorage(this) }
+    private val ownerAuth by lazy { GoogleOwnerAuth(this) }
+    private var accountLabel by mutableStateOf<String?>(null)
     private var session: VaultSession? = null
     private var unlocked by mutableStateOf(false)
     private var records by mutableStateOf<List<VaultEntry>>(emptyList())
@@ -48,6 +53,7 @@ class MainActivity : FragmentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        accountLabel = ownerAuth.authorizedEmail
         setContent {
             // Pantalla BLOQUEADA sin secretos: permite capturas para soporte.
             // Bóveda abierta: bloquear capturas y vista Recientes.
@@ -63,7 +69,11 @@ class MainActivity : FragmentActivity() {
                 onLock = ::lockVault,
                 onSave = ::saveEntry,
                 onDelete = ::deleteEntry,
-                onCopy = ::copyPassword
+                onCopy = ::copyPassword,
+                googleConfigured = ownerAuth.isConfigured,
+                googleAccount = accountLabel,
+                onConnectGoogle = ::connectGoogle,
+                onDisconnectGoogle = ::disconnectGoogle
             )
         }
     }
@@ -72,6 +82,7 @@ class MainActivity : FragmentActivity() {
         // El resultado de PIN/patrón puede despacharse dentro de super.onStart().
         started = true
         super.onStart()
+        accountLabel = ownerAuth.authorizedEmail
         authorizedWhilePausedAtMs?.let { at ->
             authorizedWhilePausedAtMs = null
             if (SystemClock.elapsedRealtime() - at <= 10_000L) openAuthorizedVault()
@@ -244,6 +255,31 @@ class MainActivity : FragmentActivity() {
         } catch (_: Exception) {
             message = "No se pudo borrar el registro."
             false
+        }
+    }
+
+    private fun connectGoogle() {
+        if (!ownerAuth.isConfigured) {
+            message = "Firebase no configurado. La bóveda local sigue funcionando."
+            return
+        }
+        lifecycleScope.launch {
+            try {
+                val email = ownerAuth.signIn(this@MainActivity)
+                accountLabel = email
+                message = "Cuenta Google autorizada. RG-02 todavía no ha activado la sincronización."
+            } catch (_: Exception) {
+                accountLabel = null
+                message = "No se completó la vinculación Google. Comprueba cuenta y configuración."
+            }
+        }
+    }
+
+    private fun disconnectGoogle() {
+        lifecycleScope.launch {
+            ownerAuth.signOut()
+            accountLabel = null
+            message = "Cuenta Google desconectada. Los datos locales siguen intactos."
         }
     }
 

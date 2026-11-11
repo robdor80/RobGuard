@@ -1,0 +1,26 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Fail-closed: reemplazar AMBAS ocurrencias del UID al aprovisionar.
+    // El valor placeholder no coincide con ningún UID real.
+    match /vaults/{userId} {
+      allow read: if request.auth != null
+        && userId == 'CONFIGURE_OWNER_UID'
+        && request.auth.uid == 'CONFIGURE_OWNER_UID';
+      allow create, update: if request.auth != null
+        && userId == 'CONFIGURE_OWNER_UID'
+        && request.auth.uid == 'CONFIGURE_OWNER_UID'
+        && request.resource.data.keys().hasOnly([
+          'schema', 'revision', 'entries', 'wrappedDek'
+        ])
+        && request.resource.data.schema == 2
+        && request.resource.data.revision is int
+        && request.resource.data.revision > 0
+        && request.resource.data.entries is string
+        && request.resource.data.wrappedDek is string
+        && request.resource.data.entries.size() < 800000
+        && request.resource.data.wrappedDek.size() < 2048;
+      allow delete: if false;
+    }
+  }
+}
