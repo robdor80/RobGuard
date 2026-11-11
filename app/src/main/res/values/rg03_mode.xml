@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Cambiar SOLO tras migrar datos, reglas e inscripción inicial.
+         false conserva la sincronización RG-02 en las builds de desarrollo. -->
+    <bool name="rg03_device_access_enabled">false</bool>
+</resources>
