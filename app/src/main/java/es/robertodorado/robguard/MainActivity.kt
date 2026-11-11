@@ -137,7 +137,7 @@ class MainActivity : FragmentActivity() {
         started = true
         super.onStart()
         accountLabel = ownerAuth.authorizedEmail
-        if (deviceAuthorization.enabled && accountLabel != null) refreshDeviceAccess()
+        if (deviceAuthorization.enabled) refreshDeviceAccess()
         try {
             connectivity.registerDefaultNetworkCallback(networkCallback)
             networkCallbackRegistered = true
@@ -197,7 +197,9 @@ class MainActivity : FragmentActivity() {
             // La clave Keystore necesita existir ANTES de la autenticación.
             storage.prepareForAuthentication()
         } catch (error: Exception) {
-            message = "No se pudo preparar la bóveda. Diagnóstico: " + diagnostic(error) +
+            message = if (storage.isRevokedLocally) {
+                "RobGuard recibió una orden de revocación y bloqueó la bóveda local."
+            } else "No se pudo preparar la bóveda. Diagnóstico: " + diagnostic(error) +
                 ". No se han borrado datos."
             return
         }
@@ -289,7 +291,9 @@ class MainActivity : FragmentActivity() {
             if (cloudPaired) syncCloud()
         } catch (error: Exception) {
             lockVault()
-            message = "No se ha podido abrir la bóveda. Diagnóstico: " + diagnostic(error) +
+            message = if (storage.isRevokedLocally) {
+                "La bóveda se ha bloqueado por una revocación remota."
+            } else "No se ha podido abrir la bóveda. Diagnóstico: " + diagnostic(error) +
                 ". No se han borrado datos ni claves. No desinstales la aplicación."
         }
     }
@@ -519,13 +523,19 @@ class MainActivity : FragmentActivity() {
      * no puede devolver a un dispositivo el acceso a Firestore.
      */
     private fun refreshDeviceAccess() {
-        if (!deviceAuthorization.enabled || ownerAuth.authorizedUid == null ||
-            deviceCheckInProgress
-        ) return
+        if (!deviceAuthorization.enabled || deviceCheckInProgress) return
         deviceCheckInProgress = true
         lifecycleScope.launch {
             try {
-                val info = deviceAuthorization.registerIfNeeded()
+                val info = try {
+                    // La orden de revocación se consulta sin depender de Google.
+                    deviceAuthorization.refreshMine()
+                } catch (_: IllegalStateException) {
+                    if (ownerAuth.authorizedUid == null) throw IllegalStateException(
+                        "Primero conecta la cuenta propietaria para registrar la instalación"
+                    )
+                    deviceAuthorization.registerIfNeeded()
+                }
                 deviceSelf = info
                 when (info.status) {
                     DeviceStatus.PENDING -> {
