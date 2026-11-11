@@ -1,4 +1,4 @@
-name: Android RG-00
+name: RobGuard Android CI
 
 on:
   push:
@@ -6,6 +6,10 @@ on:
 
 permissions:
   contents: read
+
+concurrency:
+  group: android-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
@@ -23,9 +27,17 @@ jobs:
           log-accepted-android-sdk-licenses: false
       - name: Instalar SDK
         run: sdkmanager 'platforms;android-36' 'build-tools;35.0.0'
-      - name: Verificar fuentes y compilar sin firmas
+      - name: Pruebas, lint y compilación sin firmas de distribución
         run: |
           chmod +x gradlew
-          ./gradlew :app:testReleaseUnitTest :app:lintRelease :app:assembleRelease --no-daemon
-      - name: Verificar contrato inicial
+          ./gradlew :app:testReleaseUnitTest :app:lintRelease :app:assembleRelease :app:assembleDebug --no-daemon
+      - name: Verificar contrato RS-05
         run: python3 tools/check_rg00.py
+      - name: APK de desarrollo para pruebas manuales (no Release)
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: RobGuard-RG01-debug
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 7
