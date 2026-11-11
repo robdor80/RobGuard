@@ -1,42 +1,42 @@
 # RobGuard
 
-Gestor **personal** de contraseñas para Android, con acceso local sin conexión y sincronización cifrada prevista con Firebase.
+Gestor **personal** de contraseñas para Android, con bóveda local cifrada y sincronización cifrada con Firebase.
 
-**Estado:** RG-01 implementada y comprobada en CI; RG-02 es la siguiente fase. Incluye bóveda cifrada local, CRUD, búsqueda, generador y desbloqueo del dispositivo. **Todavía no hay recuperación ni sincronización Firebase** ni una Release publicada/verificada en Android real. No usar como única copia de contraseñas reales hasta completar RG-02 y las pruebas oficiales de RG-04.
+**Estado (11/11/2026):** RG-00 a RG-03 implementadas e integradas en `main`. Android CI y pruebas adversariales de Firestore PASS. **Aún no hay Release firmada instalada y verificada físicamente en Android.** El modo por instalación RG-03 permanece DESACTIVADO, y las reglas RG-03 no se han desplegado en Firebase. La primera publicación oficial y las pruebas con Realme/Tab S9+ corresponden a RG-04. No usar RobGuard como único depósito de contraseñas reales hasta certificar recuperación y sincronización.
 
 ## Decisiones
 
-- Kotlin + Jetpack Compose + Material 3, un módulo `app`.
+- Kotlin + Jetpack Compose + Material 3, módulo `app`.
 - Identidad oficial: `es.robertodorado.robguard` (Debug: `es.robertodorado.robguard.debug`).
 - SDK mínimo 26, SDK destino y compilación 36; Java 17.
-- La bóveda local usa AES-256-GCM y la clave se protege mediante Android Keystore. Firebase, cuando llegue RG-02, recibirá solamente información cifrada.
-- Acceso habitual por biometría, alta con la única cuenta Google autorizada y opción de revocar un dispositivo (en fases posteriores).
-- Los datos locales de RobGuard no se incluyen en las copias de seguridad automáticas de Android.
-- GitHub es público: jamás incluir contraseñas, claves privadas ni credenciales Firebase de servicio.
-- Toda distribución oficial debe pasar por **RobPublisher → RS-05 → GitHub Release → RobStore**; no se publicarán APK manualmente.
+- Bóveda local AES-256-GCM; clave protegida con Android Keystore.
+- Google Firebase Auth: una cuenta propietaria; RG-02 incluye recuperación mediante código y sincronización cifrada.
+- RG-03 separa las identidades anónimas por instalación y prepara autorización, inventario, revocación y borrado diferido. **No funciona hasta activar el modo y desplegar reglas finales siguiendo la migración.** No equivale a una credencial hardware intransferible ni garantiza borrado instantáneo offline.
+- Datos locales excluidos de las copias automáticas de Android.
+- GitHub público: jamás incluir contraseñas, claves privadas ni credenciales de servicio.
+- Distribución oficial únicamente **RobPublisher → RS-05 → GitHub Release → RobStore**, nunca APK manuales.
 
-## Compilación
+## Compilación de control sin publicación
 
-Requisitos: JDK 17, Android SDK 36 y Build Tools 35.0.0.
+Se requieren JDK 17, Android SDK 36 y Build Tools 35.0.0.
 
 ```sh
 ./gradlew :app:testReleaseUnitTest :app:lintRelease :app:assembleRelease
+python3 tools/check_rg00.py
 ```
 
-El wrapper descarga y verifica en el primer uso el JAR oficial usado por RobStore, si todavía no está presente. Gradle 8.13 se verifica mediante su SHA-256 en `gradle-wrapper.properties`.
+Este CI no firma con la identidad privada Release ni publica. El wrapper Gradle se verifica mediante su SHA-256 en `gradle-wrapper.properties`.
 
 ## Publicación RS-05
 
-Los archivos oficiales están en `.github/android-distribution.json` y `.github/workflows/android-distribute.yml`. El canal habilitado es `release`.
+Contratos oficiales: `.github/android-distribution.json`, `.github/workflows/android-distribute.yml`, icono `robstore/icon.png`, solo canal `release`. La app conserva el mismo certificado de firma; una actualización exige incrementar `versionCode`.
 
-Alta del **propietario**, una sola vez y en un dispositivo propio con acceso administrador a GitHub, JDK, Python y gh:
+El alta privada del propietario se realiza una sola vez desde la copia de RobStore con:
 
 ```sh
 python3 tools/android_owner_setup.py --repository robdor80/RobGuard --catalog --release-only
 ```
 
-El comando anterior pertenece al repositorio **RobStore**, no a este proyecto: ejecutarlo desde una copia de RobStore (o invocar su script por ruta). El asistente crea y protege la clave de firma en el dispositivo del propietario; no entregar keystores a una IA ni versionarlos. Añade el topic exacto `robstore-app`. Después de completar RG-04, RobPublisher podrá publicar una Release estable con un botón.
+No repetir el alta si ya está efectuada: verificar los secretos y certificado existentes en el momento de la primera publicación. La copia de seguridad privada de la clave se mantiene fuera de GitHub.
 
-Consulta [plan breve](docs/PLAN.md), [contrato de distribución](docs/RS-05.md) y [RG-01: seguridad y pruebas](docs/RG-01.md).
-
-La primera publicación oficial no debe hacerse hasta que estén terminadas y comprobadas la bóveda cifrada, la autenticación y la sincronización.
+Consulta [plan](docs/PLAN.md), [RG-04: Release y pruebas](docs/RG-04.md), [migración RG-03](docs/RG-03-MIGRACION.md) y [contrato de distribución](docs/RS-05.md).
