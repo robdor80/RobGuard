@@ -71,6 +71,14 @@ class MainActivity : FragmentActivity() {
         }
     }
 
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        val pending = clipboardToken
+        if (hasFocus && pending != null && SystemClock.elapsedRealtime() >= clipboardExpiryMs) {
+            clearOwnClipboard(pending)
+        }
+    }
+
     override fun onStop() {
         started = false
         lockVault()
