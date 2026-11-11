@@ -16,6 +16,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -37,6 +38,7 @@ class MainActivity : FragmentActivity() {
     private var clipboardToken: String? = null
     private var clipboardExpiryMs: Long = 0L
     private var started = false
+    private var authorizedWhilePausedAtMs: Long? = null
     private val legacyCredentialLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
@@ -46,8 +48,13 @@ class MainActivity : FragmentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         setContent {
+            // Pantalla BLOQUEADA sin secretos: permite capturas para soporte.
+            // Bóveda abierta: bloquear capturas y vista Recientes.
+            SideEffect {
+                if (unlocked) window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                else window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+            }
             RobGuardApp(
                 unlocked = unlocked,
                 entries = records,
@@ -65,6 +72,10 @@ class MainActivity : FragmentActivity() {
         // El resultado de PIN/patrón puede despacharse dentro de super.onStart().
         started = true
         super.onStart()
+        authorizedWhilePausedAtMs?.let { at ->
+            authorizedWhilePausedAtMs = null
+            if (SystemClock.elapsedRealtime() - at <= 10_000L) openAuthorizedVault()
+        }
         val pending = clipboardToken
         if (pending != null && SystemClock.elapsedRealtime() >= clipboardExpiryMs) {
             clearOwnClipboard(pending)
@@ -106,20 +117,33 @@ class MainActivity : FragmentActivity() {
             return
         }
         message = null
+        try {
+            // La clave Keystore necesita existir ANTES de la autenticación.
+            storage.prepareForAuthentication()
+        } catch (error: Exception) {
+            message = "No se pudo preparar la bóveda. Diagnóstico: " + diagnostic(error) +
+                ". No se han borrado datos."
+            return
+        }
         val modern = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
-        val authenticators = if (modern) {
-            BiometricManager.Authenticators.BIOMETRIC_STRONG or
-                BiometricManager.Authenticators.DEVICE_CREDENTIAL
+        val manager = BiometricManager.from(this)
+        val preferred = BiometricManager.Authenticators.BIOMETRIC_STRONG or
+            BiometricManager.Authenticators.DEVICE_CREDENTIAL
+        val authenticators = if (modern &&
+            manager.canAuthenticate(preferred) == BiometricManager.BIOMETRIC_SUCCESS) {
+            preferred
+        } else if (modern) {
+            BiometricManager.Authenticators.DEVICE_CREDENTIAL
         } else {
             BiometricManager.Authenticators.BIOMETRIC_STRONG
         }
-        val manager = BiometricManager.from(this)
         if (!modern && manager.canAuthenticate(authenticators) != BiometricManager.BIOMETRIC_SUCCESS) {
             requestLegacyCredential()
             return
         }
         if (modern && manager.canAuthenticate(authenticators) != BiometricManager.BIOMETRIC_SUCCESS) {
-            message = "Android no permite la autenticación segura configurada en este dispositivo."
+            message = "Android no permite la autenticación segura. Código: " +
+                manager.canAuthenticate(authenticators)
             return
         }
         val prompt = BiometricPrompt(
@@ -129,6 +153,7 @@ class MainActivity : FragmentActivity() {
                 override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
                     super.onAuthenticationSucceeded(result)
                     if (started) openAuthorizedVault()
+                    else authorizedWhilePausedAtMs = SystemClock.elapsedRealtime()
                 }
 
                 override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
@@ -169,16 +194,22 @@ class MainActivity : FragmentActivity() {
             val opened = storage.openAfterAuthentication()
             session?.close()
             session = opened
+            // Aplicar FLAG_SECURE ANTES de que Compose muestre datos sensibles.
+            window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
             records = opened.records
             unlocked = true
             message = null
             armIdleTimeout()
-        } catch (_: Exception) {
+        } catch (error: Exception) {
             lockVault()
-            message = "No se ha podido abrir la bóveda. No se han eliminado datos. " +
-                "Comprueba el bloqueo del dispositivo y evita reinstalar la aplicación."
+            message = "No se ha podido abrir la bóveda. Diagnóstico: " + diagnostic(error) +
+                ". No se han borrado datos ni claves. No desinstales la aplicación."
         }
     }
+
+    private fun diagnostic(error: Throwable): String =
+        generateSequence(error) { it.cause }.take(3)
+            .joinToString("/") { it.javaClass.simpleName.ifEmpty { "Error" } }
 
     private fun saveEntry(entry: VaultEntry): Boolean {
         val active = session?.takeIf { unlocked && it.isOpen } ?: return false
