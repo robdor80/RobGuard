@@ -24,6 +24,8 @@ import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.lifecycleScope
 import es.robertodorado.robguard.cloud.GoogleOwnerAuth
+import es.robertodorado.robguard.cloud.CloudVaultService
+import es.robertodorado.robguard.vault.RecoveryCrypto
 import kotlinx.coroutines.launch
 import es.robertodorado.robguard.vault.VaultEntry
 import es.robertodorado.robguard.vault.VaultSession
@@ -33,6 +35,11 @@ import java.util.UUID
 class MainActivity : FragmentActivity() {
     private val storage by lazy { VaultStorage(this) }
     private val ownerAuth by lazy { GoogleOwnerAuth(this) }
+    private val cloud by lazy { CloudVaultService(storage, ownerAuth) }
+    private var cloudPaired by mutableStateOf(false)
+    private var cloudBusy by mutableStateOf(false)
+    private var cloudStatus by mutableStateOf("Sólo almacenamiento local")
+    private var recoveryCode by mutableStateOf<String?>(null)
     private var accountLabel by mutableStateOf<String?>(null)
     private var session: VaultSession? = null
     private var unlocked by mutableStateOf(false)
@@ -73,7 +80,16 @@ class MainActivity : FragmentActivity() {
                 googleConfigured = ownerAuth.isConfigured,
                 googleAccount = accountLabel,
                 onConnectGoogle = ::connectGoogle,
-                onDisconnectGoogle = ::disconnectGoogle
+                onDisconnectGoogle = ::disconnectGoogle,
+                cloudPaired = cloudPaired,
+                cloudBusy = cloudBusy,
+                cloudStatus = cloudStatus,
+                recoveryCode = recoveryCode,
+                onPrepareBackup = ::prepareCloudBackup,
+                onConfirmBackup = ::confirmCloudBackup,
+                onCancelBackup = { recoveryCode = null },
+                onRecover = ::recoverFromCloud,
+                onSyncCloud = ::syncCloud
             )
         }
     }
@@ -210,7 +226,13 @@ class MainActivity : FragmentActivity() {
             records = opened.records
             unlocked = true
             message = null
+            cloudPaired = ownerAuth.authorizedUid?.let { uid ->
+                storage.readCloudBaseline(opened, uid) != null
+            } ?: false
+            cloudStatus = if (cloudPaired) "Sincronización cifrada activada"
+                else "Copia cifrada pendiente de activar o recuperar"
             armIdleTimeout()
+            if (cloudPaired) syncCloud()
         } catch (error: Exception) {
             lockVault()
             message = "No se ha podido abrir la bóveda. Diagnóstico: " + diagnostic(error) +
@@ -223,6 +245,10 @@ class MainActivity : FragmentActivity() {
             .joinToString("/") { it.javaClass.simpleName.ifEmpty { "Error" } }
 
     private fun saveEntry(entry: VaultEntry): Boolean {
+        if (cloudBusy) {
+            message = "Sincronización en curso. Inténtalo al finalizar para evitar conflictos."
+            return false
+        }
         val active = session?.takeIf { unlocked && it.isOpen } ?: return false
         return try {
             entry.validate()
@@ -235,6 +261,7 @@ class MainActivity : FragmentActivity() {
             records = updated
             armIdleTimeout()
             message = null
+            if (cloudPaired) syncCloud()
             true
         } catch (_: Exception) {
             message = "No se ha guardado el registro. La bóveda anterior permanece intacta."
@@ -243,6 +270,10 @@ class MainActivity : FragmentActivity() {
     }
 
     private fun deleteEntry(id: String): Boolean {
+        if (cloudBusy) {
+            message = "Sincronización en curso. Inténtalo al finalizar."
+            return false
+        }
         val active = session?.takeIf { unlocked && it.isOpen } ?: return false
         if (records.none { it.id == id }) return false
         return try {
@@ -251,6 +282,7 @@ class MainActivity : FragmentActivity() {
             records = updated
             armIdleTimeout()
             message = null
+            if (cloudPaired) syncCloud()
             true
         } catch (_: Exception) {
             message = "No se pudo borrar el registro."
@@ -280,6 +312,89 @@ class MainActivity : FragmentActivity() {
             ownerAuth.signOut()
             accountLabel = null
             message = "Cuenta Google desconectada. Los datos locales siguen intactos."
+        }
+    }
+
+    private fun prepareCloudBackup() {
+        if (session?.isOpen != true || cloudPaired || ownerAuth.authorizedUid == null) {
+            message = "Desbloquea la bóveda y conecta la cuenta Google autorizada."
+            return
+        }
+        recoveryCode = RecoveryCrypto.generate()
+    }
+
+    private fun confirmCloudBackup() {
+        val code = recoveryCode ?: return
+        val active = session?.takeIf { unlocked && it.isOpen } ?: return
+        if (cloudBusy) return
+        recoveryCode = null
+        cloudBusy = true
+        lifecycleScope.launch {
+            try {
+                val result = cloud.createBackup(active, code)
+                if (session === active && unlocked) {
+                    cloudPaired = true
+                    cloudStatus = "Copia cifrada creada · revisión ${result.revision}"
+                    message = null
+                }
+            } catch (_: Exception) {
+                message = "No se pudo crear la copia. Nada se sobrescribió. Conserva tu código."
+            } finally {
+                cloudBusy = false
+            }
+        }
+    }
+
+    private fun recoverFromCloud(code: String) {
+        val active = session?.takeIf { unlocked && it.isOpen } ?: return
+        if (cloudBusy) return
+        cloudBusy = true
+        lifecycleScope.launch {
+            try {
+                val (restored, result) = cloud.restore(active, code)
+                if (unlocked && session === active) {
+                    session = restored
+                    records = result.entries
+                    cloudPaired = true
+                    cloudStatus = "Bóveda recuperada · revisión ${result.revision}"
+                    message = null
+                    armIdleTimeout()
+                    syncCloud()
+                } else {
+                    restored.close()
+                }
+            } catch (_: Exception) {
+                message = "No se pudo recuperar: revisa el código, la red o la " +
+                    "autenticación reciente de Android. Tu bóveda no se ha borrado."
+            } finally {
+                cloudBusy = false
+            }
+        }
+    }
+
+    private fun syncCloud() {
+        val active = session?.takeIf { unlocked && it.isOpen } ?: return
+        if (!cloudPaired || cloudBusy || ownerAuth.authorizedUid == null) return
+        cloudBusy = true
+        cloudStatus = "Sincronizando cifrado…"
+        lifecycleScope.launch {
+            try {
+                val result = cloud.synchronize(active)
+                if (session === active && unlocked) {
+                    records = result.entries
+                    cloudStatus = "Sincronizado · revisión ${result.revision}"
+                    message = null
+                }
+            } catch (conflict: CloudVaultService.Conflict) {
+                cloudStatus = "Conflicto pendiente"
+                message = "Hay ${conflict.count} registro(s) modificados en ambos " +
+                    "dispositivos. No se ha sobrescrito ninguna versión."
+            } catch (_: Exception) {
+                cloudStatus = "Sin conexión o sincronización pendiente"
+                message = "No se pudo sincronizar. Los cambios locales se han conservado."
+            } finally {
+                cloudBusy = false
+            }
         }
     }
 
@@ -327,6 +442,7 @@ class MainActivity : FragmentActivity() {
     }
 
     private fun lockVault() {
+        recoveryCode = null
         handler.removeCallbacks(idleTimeout)
         // Al ir a otra app se bloquea la bóveda, pero debe quedar tiempo para pegar.
         // El portapapeles sigue bajo el temporizador de 30 s independiente.
