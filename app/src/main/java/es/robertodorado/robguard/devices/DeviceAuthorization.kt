@@ -32,6 +32,8 @@ internal class DeviceAuthorization(
 ) {
     private val appContext = context.applicationContext
     private val identity by lazy { DeviceIdentity(appContext) }
+    private val expectedOwnerUid: String =
+        appContext.getString(R.string.rg02_owner_uid)
 
     /** Sin despliegue de reglas RG-03: mantener RG-02 operativo hasta RG-04. */
     val enabled: Boolean = appContext.resources.getBoolean(R.bool.rg03_device_access_enabled)
@@ -209,7 +211,9 @@ internal class DeviceAuthorization(
         check(snap.exists() && snap.getLong("schema") == 3L) {
             "Registro de instalación incompatible"
         }
-        check(snap.getString("ownerUid") == owner.authorizedUid) {
+        // La revocación y su orden de borrado deben poder procesarse incluso
+        // si el usuario ha desconectado Google en el dispositivo perdido.
+        check(snap.getString("ownerUid") == expectedOwnerUid) {
             "El registro no corresponde a la cuenta propietaria"
         }
         return DeviceInfo(
