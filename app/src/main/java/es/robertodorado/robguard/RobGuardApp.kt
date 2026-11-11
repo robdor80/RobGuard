@@ -166,8 +166,8 @@ private fun LockedApp(message: String?, onUnlock: () -> Unit) {
                 if (message != null) {
                     MessageCard(message)
                 }
-                Text("RG-01 · Sin sincronización ni recuperación entre dispositivos. " +
-                    "No guardes todavía tus únicas copias de contraseñas importantes.",
+                Text("Hasta validar la primera Release firmada y su recuperación, " +
+                    "conserva una copia externa segura de tus contraseñas importantes.",
                     color = SoftText, fontSize = 12.sp)
             }
         }
