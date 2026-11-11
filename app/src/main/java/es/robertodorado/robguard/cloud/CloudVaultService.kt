@@ -5,6 +5,7 @@ import com.google.firebase.firestore.DocumentReference
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Source
+import es.robertodorado.robguard.devices.DeviceAuthorization
 import es.robertodorado.robguard.vault.VaultEntry
 import es.robertodorado.robguard.vault.VaultMerge
 import es.robertodorado.robguard.vault.VaultSession
@@ -18,7 +19,8 @@ import kotlinx.coroutines.tasks.await
  */
 internal class CloudVaultService(
     private val storage: VaultStorage,
-    private val ownerAuth: GoogleOwnerAuth
+    private val ownerAuth: GoogleOwnerAuth,
+    private val deviceAuthorization: DeviceAuthorization
 ) {
     data class SyncResult(val entries: List<VaultEntry>, val revision: Long)
     class Conflict(val count: Int) : IllegalStateException(
@@ -29,10 +31,16 @@ internal class CloudVaultService(
         val revision: Long, val wrappedDek: ByteArray, val entries: ByteArray
     )
 
-    private fun authorized(): Pair<String, DocumentReference> {
+    private suspend fun authorized(): Pair<String, DocumentReference> {
         val uid = ownerAuth.authorizedUid ?: error("Cuenta Google no autorizada")
-        val db: FirebaseFirestore = ownerAuth.firestore
-            ?: error("Firebase no disponible")
+        val db: FirebaseFirestore = if (deviceAuthorization.enabled) {
+            // En RG-03, comprobar el estado en SERVIDOR antes de cada operación.
+            // Firestore Rules repite esta condición en cada lectura/escritura.
+            deviceAuthorization.firestoreForVault()
+        } else {
+            // Compatibilidad RG-02 hasta la migración controlada en RG-04.
+            ownerAuth.firestore ?: error("Firebase no disponible")
+        }
         return uid to db.collection("vaults").document(uid)
     }
 

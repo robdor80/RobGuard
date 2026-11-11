@@ -93,7 +93,15 @@ internal fun RobGuardApp(
     onConfirmBackup: () -> Unit = {},
     onCancelBackup: () -> Unit = {},
     onRecover: (String) -> Unit = {},
-    onSyncCloud: () -> Unit = {}
+    onSyncCloud: () -> Unit = {},
+    deviceAccessEnabled: Boolean = false,
+    currentDevice: es.robertodorado.robguard.devices.DeviceAuthorization.DeviceInfo? = null,
+    deviceList: List<es.robertodorado.robguard.devices.DeviceAuthorization.DeviceInfo> = emptyList(),
+    deviceBusy: Boolean = false,
+    deviceMessage: String = "RG-03 pendiente de activar",
+    onRefreshDevices: () -> Unit = {},
+    onApproveDevice: (String) -> Unit = {},
+    onRevokeDevice: (String, Boolean) -> Unit = { _, _ -> }
 ) {
     MaterialTheme(colorScheme = Palette) {
         if (unlocked) {
@@ -103,7 +111,9 @@ internal fun RobGuardApp(
                     googleConfigured, googleAccount, onConnectGoogle, onDisconnectGoogle,
                     cloudPaired, cloudConflict, onResolveConflicts,
                     cloudBusy, cloudStatus, recoveryCode,
-                    onPrepareBackup, onConfirmBackup, onCancelBackup, onRecover, onSyncCloud)
+                    onPrepareBackup, onConfirmBackup, onCancelBackup, onRecover, onSyncCloud,
+                    deviceAccessEnabled, currentDevice, deviceList, deviceBusy, deviceMessage,
+                    onRefreshDevices, onApproveDevice, onRevokeDevice)
             }
         } else {
             LockedApp(message, onUnlock)
@@ -156,8 +166,8 @@ private fun LockedApp(message: String?, onUnlock: () -> Unit) {
                 if (message != null) {
                     MessageCard(message)
                 }
-                Text("RG-01 · Sin sincronización ni recuperación entre dispositivos. " +
-                    "No guardes todavía tus únicas copias de contraseñas importantes.",
+                Text("Hasta validar la primera Release firmada y su recuperación, " +
+                    "conserva una copia externa segura de tus contraseñas importantes.",
                     color = SoftText, fontSize = 12.sp)
             }
         }
@@ -186,7 +196,15 @@ private fun UnlockedApp(
     onConfirmBackup: () -> Unit,
     onCancelBackup: () -> Unit,
     onRecover: (String) -> Unit,
-    onSyncCloud: () -> Unit
+    onSyncCloud: () -> Unit,
+    deviceAccessEnabled: Boolean,
+    currentDevice: es.robertodorado.robguard.devices.DeviceAuthorization.DeviceInfo?,
+    deviceList: List<es.robertodorado.robguard.devices.DeviceAuthorization.DeviceInfo>,
+    deviceBusy: Boolean,
+    deviceMessage: String,
+    onRefreshDevices: () -> Unit,
+    onApproveDevice: (String) -> Unit,
+    onRevokeDevice: (String, Boolean) -> Unit
 ) {
     var section by remember { mutableStateOf(GuardSection.VAULT) }
     var selected by remember { mutableStateOf<VaultEntry?>(null) }
@@ -258,7 +276,9 @@ private fun UnlockedApp(
                         googleConfigured, googleAccount, onConnectGoogle, onDisconnectGoogle,
                         cloudPaired, cloudConflict, onResolveConflicts,
                         cloudBusy, cloudStatus, recoveryCode,
-                        onPrepareBackup, onConfirmBackup, onCancelBackup, onRecover, onSyncCloud)
+                        onPrepareBackup, onConfirmBackup, onCancelBackup, onRecover, onSyncCloud,
+                    deviceAccessEnabled, currentDevice, deviceList, deviceBusy, deviceMessage,
+                    onRefreshDevices, onApproveDevice, onRevokeDevice)
                 }
             }
         }
@@ -503,7 +523,15 @@ private fun SettingsContent(
     onConfirmBackup: () -> Unit,
     onCancelBackup: () -> Unit,
     onRecover: (String) -> Unit,
-    onSyncCloud: () -> Unit
+    onSyncCloud: () -> Unit,
+    deviceAccessEnabled: Boolean,
+    currentDevice: es.robertodorado.robguard.devices.DeviceAuthorization.DeviceInfo?,
+    deviceList: List<es.robertodorado.robguard.devices.DeviceAuthorization.DeviceInfo>,
+    deviceBusy: Boolean,
+    deviceMessage: String,
+    onRefreshDevices: () -> Unit,
+    onApproveDevice: (String) -> Unit,
+    onRevokeDevice: (String, Boolean) -> Unit
 ) {
     var showRecoveryInput by remember { mutableStateOf(false) }
     var enteredRecoveryCode by remember { mutableStateOf("") }
@@ -610,6 +638,17 @@ private fun SettingsContent(
             }
         )
     }
+    DeviceSettingsPanel(
+        enabled = deviceAccessEnabled,
+        googleAccount = googleAccount,
+        currentDevice = currentDevice,
+        devices = deviceList,
+        busy = deviceBusy,
+        statusMessage = deviceMessage,
+        onRefresh = onRefreshDevices,
+        onApprove = onApproveDevice,
+        onRevoke = onRevokeDevice
+    )
     InfoCard("Distribución", "Sólo RobPublisher → RS-05 → GitHub Release → RobStore.")
     Button(onClick = onLock) { Text("Bloquear ahora") }
 }

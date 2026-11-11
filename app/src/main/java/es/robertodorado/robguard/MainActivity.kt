@@ -28,6 +28,8 @@ import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.lifecycleScope
 import es.robertodorado.robguard.cloud.GoogleOwnerAuth
 import es.robertodorado.robguard.cloud.CloudVaultService
+import es.robertodorado.robguard.devices.DeviceAuthorization
+import es.robertodorado.robguard.devices.DeviceStatus
 import es.robertodorado.robguard.vault.RecoveryCrypto
 import kotlinx.coroutines.launch
 import es.robertodorado.robguard.vault.VaultEntry
@@ -38,7 +40,8 @@ import java.util.UUID
 class MainActivity : FragmentActivity() {
     private val storage by lazy { VaultStorage(this) }
     private val ownerAuth by lazy { GoogleOwnerAuth(this) }
-    private val cloud by lazy { CloudVaultService(storage, ownerAuth) }
+    private val deviceAuthorization by lazy { DeviceAuthorization(this, ownerAuth) }
+    private val cloud by lazy { CloudVaultService(storage, ownerAuth, deviceAuthorization) }
     private val connectivity by lazy {
         getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
     }
@@ -47,7 +50,10 @@ class MainActivity : FragmentActivity() {
         override fun onCapabilitiesChanged(network: Network, capabilities: NetworkCapabilities) {
             if (capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)) {
                 runOnUiThread {
-                    if (started && unlocked) syncCloud()
+                    if (started) {
+                        if (deviceAuthorization.enabled) refreshDeviceAccess()
+                        if (unlocked) syncCloud()
+                    }
                 }
             }
         }
@@ -58,6 +64,11 @@ class MainActivity : FragmentActivity() {
     private var cloudStatus by mutableStateOf("Sólo almacenamiento local")
     private var recoveryCode by mutableStateOf<String?>(null)
     private var accountLabel by mutableStateOf<String?>(null)
+    private var deviceSelf by mutableStateOf<DeviceAuthorization.DeviceInfo?>(null)
+    private var deviceList by mutableStateOf<List<DeviceAuthorization.DeviceInfo>>(emptyList())
+    private var deviceMessage by mutableStateOf("RG-03 pendiente de activar en Release")
+    private var deviceBusy by mutableStateOf(false)
+    private var deviceCheckInProgress = false
     private var session: VaultSession? = null
     private var unlocked by mutableStateOf(false)
     private var records by mutableStateOf<List<VaultEntry>>(emptyList())
@@ -108,7 +119,15 @@ class MainActivity : FragmentActivity() {
                 onConfirmBackup = ::confirmCloudBackup,
                 onCancelBackup = { recoveryCode = null },
                 onRecover = ::recoverFromCloud,
-                onSyncCloud = ::syncCloud
+                onSyncCloud = ::syncCloud,
+                deviceAccessEnabled = deviceAuthorization.enabled,
+                currentDevice = deviceSelf,
+                deviceList = deviceList,
+                deviceBusy = deviceBusy,
+                deviceMessage = deviceMessage,
+                onRefreshDevices = ::loadDeviceList,
+                onApproveDevice = ::approveDevice,
+                onRevokeDevice = ::revokeDevice
             )
         }
     }
@@ -118,6 +137,7 @@ class MainActivity : FragmentActivity() {
         started = true
         super.onStart()
         accountLabel = ownerAuth.authorizedEmail
+        if (deviceAuthorization.enabled) refreshDeviceAccess()
         try {
             connectivity.registerDefaultNetworkCallback(networkCallback)
             networkCallbackRegistered = true
@@ -167,6 +187,14 @@ class MainActivity : FragmentActivity() {
 
     private fun authenticate() {
         if (unlocked) return
+        if (deviceAuthorization.enabled && deviceSelf?.status in listOf(
+                DeviceStatus.REVOKED, DeviceStatus.REVOKE_PENDING,
+                DeviceStatus.WIPE_CONFIRMED
+            )
+        ) {
+            message = "Este dispositivo ha sido revocado. No puede abrir la bóveda."
+            return
+        }
         val keyguard = getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
         if (!keyguard.isDeviceSecure) {
             message = "Para proteger la bóveda, activa primero un PIN, patrón o contraseña en Android."
@@ -177,7 +205,9 @@ class MainActivity : FragmentActivity() {
             // La clave Keystore necesita existir ANTES de la autenticación.
             storage.prepareForAuthentication()
         } catch (error: Exception) {
-            message = "No se pudo preparar la bóveda. Diagnóstico: " + diagnostic(error) +
+            message = if (storage.isRevokedLocally) {
+                "RobGuard recibió una orden de revocación y bloqueó la bóveda local."
+            } else "No se pudo preparar la bóveda. Diagnóstico: " + diagnostic(error) +
                 ". No se han borrado datos."
             return
         }
@@ -269,7 +299,9 @@ class MainActivity : FragmentActivity() {
             if (cloudPaired) syncCloud()
         } catch (error: Exception) {
             lockVault()
-            message = "No se ha podido abrir la bóveda. Diagnóstico: " + diagnostic(error) +
+            message = if (storage.isRevokedLocally) {
+                "La bóveda se ha bloqueado por una revocación remota."
+            } else "No se ha podido abrir la bóveda. Diagnóstico: " + diagnostic(error) +
                 ". No se han borrado datos ni claves. No desinstales la aplicación."
         }
     }
@@ -346,6 +378,7 @@ class MainActivity : FragmentActivity() {
                 cloudStatus = if (cloudPaired) "Sincronización cifrada activada"
                     else "Puedes crear o recuperar una copia cifrada"
                 message = null
+                if (deviceAuthorization.enabled) refreshDeviceAccess()
                 if (cloudPaired) syncCloud()
             } catch (_: Exception) {
                 accountLabel = null
@@ -358,6 +391,8 @@ class MainActivity : FragmentActivity() {
         lifecycleScope.launch {
             ownerAuth.signOut()
             accountLabel = null
+            deviceSelf = null
+            deviceList = emptyList()
             message = "Cuenta Google desconectada. Los datos locales siguen intactos."
         }
     }
@@ -485,6 +520,132 @@ class MainActivity : FragmentActivity() {
                 cloudStatus = "Conflicto pendiente"
             } finally {
                 cloudBusy = false
+            }
+        }
+    }
+
+
+    /**
+     * RG-03: consulta al servidor incluso si la bóveda está BLOQUEADA.
+     * No muestra "revocado" por una caché local. La comprobación fallida
+     * no puede devolver a un dispositivo el acceso a Firestore.
+     */
+    private fun refreshDeviceAccess() {
+        if (!deviceAuthorization.enabled || deviceCheckInProgress) return
+        deviceCheckInProgress = true
+        lifecycleScope.launch {
+            try {
+                val info = if (ownerAuth.authorizedUid != null &&
+                    deviceAuthorization.thisDeviceUid == null
+                ) {
+                    // Primera instalación: crear propuesta sin privilegios.
+                    deviceAuthorization.registerIfNeeded()
+                } else try {
+                    // La revocación se consulta incluso tras cerrar Google.
+                    deviceAuthorization.refreshMine()
+                } catch (_: IllegalStateException) {
+                    if (ownerAuth.authorizedUid == null) throw IllegalStateException(
+                        "Conecta la cuenta propietaria para registrar esta instalación"
+                    )
+                    deviceAuthorization.registerIfNeeded()
+                }
+                deviceSelf = info
+                when (info.status) {
+                    DeviceStatus.PENDING -> {
+                        deviceMessage = "Pendiente de autorización desde otro dispositivo"
+                    }
+                    DeviceStatus.AUTHORIZED -> {
+                        deviceMessage = "Este dispositivo está autorizado"
+                        deviceAuthorization.recordHeartbeat()
+                    }
+                    DeviceStatus.REVOKED -> {
+                        lockVault()
+                        deviceMessage = if (info.wipeRequested) {
+                            // Primero bloquear; después escribir barrera y
+                            // destruir la clave LOCAL antes del acuse.
+                            storage.wipeAfterVerifiedRevocation()
+                            try {
+                                deviceAuthorization.acknowledgeWipe()
+                                "Bóveda local borrada y revocación confirmada"
+                            } catch (_: Exception) {
+                                "Bóveda local borrada; confirmación pendiente"
+                            }
+                        } else {
+                            "Acceso remoto revocado; la bóveda se ha bloqueado en esta sesión."
+                        }
+                        message = deviceMessage
+                    }
+                    DeviceStatus.WIPE_CONFIRMED -> {
+                        lockVault()
+                        deviceMessage = "Borrado local confirmado"
+                        message = deviceMessage
+                    }
+                    DeviceStatus.REVOKE_PENDING -> {
+                        lockVault()
+                        deviceMessage = "Revocación pendiente"
+                    }
+                }
+            } catch (_: Exception) {
+                deviceMessage = "No se pudo comprobar el estado en el servidor"
+                // La nube utiliza reglas RG-03 independientes: un fallo
+                // de red no permite escrituras ni levantar una revocación.
+            } finally {
+                deviceCheckInProgress = false
+            }
+        }
+    }
+
+    private fun loadDeviceList() {
+        if (!deviceAuthorization.enabled || deviceBusy || ownerAuth.authorizedUid == null) return
+        deviceBusy = true
+        lifecycleScope.launch {
+            try {
+                deviceSelf = deviceAuthorization.registerIfNeeded()
+                deviceList = if (deviceSelf?.status == DeviceStatus.AUTHORIZED) {
+                    deviceAuthorization.listDevices()
+                } else emptyList()
+                deviceMessage = if (deviceSelf?.status == DeviceStatus.PENDING) {
+                    "Pendiente de aprobar. UID de esta instalación: " +
+                        (deviceSelf?.authUid ?: "desconocido")
+                } else "Inventario actualizado desde el servidor"
+            } catch (_: Exception) {
+                deviceMessage = "Inventario no disponible: verifica conexión y autorización"
+            } finally {
+                deviceBusy = false
+            }
+        }
+    }
+
+    private fun approveDevice(targetUid: String) {
+        if (!deviceAuthorization.enabled || deviceBusy) return
+        deviceBusy = true
+        lifecycleScope.launch {
+            try {
+                deviceAuthorization.approveDevice(targetUid)
+                deviceList = deviceAuthorization.listDevices()
+                deviceMessage = "Dispositivo autorizado desde el servidor"
+            } catch (_: Exception) {
+                deviceMessage = "Autorización rechazada o conexión no disponible"
+            } finally {
+                deviceBusy = false
+            }
+        }
+    }
+
+    private fun revokeDevice(targetUid: String, wipeRequested: Boolean) {
+        if (!deviceAuthorization.enabled || deviceBusy) return
+        deviceBusy = true
+        lifecycleScope.launch {
+            try {
+                deviceAuthorization.revokeDevice(targetUid, wipeRequested)
+                deviceList = deviceAuthorization.listDevices()
+                deviceMessage = if (wipeRequested) {
+                    "Acceso revocado. Borrado local solicitado para su próxima conexión."
+                } else "Acceso a la nube revocado."
+            } catch (_: Exception) {
+                deviceMessage = "No se pudo revocar el dispositivo: inténtalo de nuevo"
+            } finally {
+                deviceBusy = false
             }
         }
     }

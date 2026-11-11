@@ -28,6 +28,41 @@ internal class VaultStorage(context: Context) {
     private val entriesFile = AtomicFile(File(directory, "entries.rg01"))
     private val cloudStateFile = AtomicFile(File(directory, "cloud-state.rg02"))
     private val restoreJournalFile = AtomicFile(File(directory, "restore-journal.rg02"))
+    private val revokedMarkerFile = AtomicFile(File(directory, "revoked.rg03"))
+
+    val isRevokedLocally: Boolean
+        get() = revokedMarkerFile.baseFile.exists()
+
+    /**
+     * Borrado criptográfico por revocación RG-03.
+     * PRIMERO marca irreversible la bóveda como bloqueada, incluso si hay
+     * interrupción de energía. Después destruye el material de clave Keystore
+     * y elimina únicamente copias cifradas LOCALES.
+     *
+     * No garantiza sobrescribir físicamente memoria flash; NO altera Firebase
+     * ni borra la identidad de dispositivo hasta confirmar el acuse remoto.
+     * Es idempotente: seguro para reintentar después de un cierre inesperado.
+     */
+    fun wipeAfterVerifiedRevocation() {
+        if (!isRevokedLocally) {
+            atomicWrite(
+                revokedMarkerFile,
+                "RobGuard/remote-wipe/v1".toByteArray(Charsets.US_ASCII)
+            )
+        }
+        val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+        if (store.containsAlias(ALIAS)) store.deleteEntry(ALIAS)
+        wrappedKeyFile.delete()
+        entriesFile.delete()
+        cloudStateFile.delete()
+        restoreJournalFile.delete()
+    }
+
+    private fun checkNotRevoked() {
+        check(!isRevokedLocally) {
+            "La bóveda fue revocada de forma remota. No se puede volver a abrir."
+        }
+    }
 
     /**
      * Preparar la KEK ANTES del diálogo de autenticación: así el token concedido
@@ -35,6 +70,7 @@ internal class VaultStorage(context: Context) {
      * una bóveda ni sustituir una clave existente.
      */
     fun prepareForAuthentication() {
+        checkNotRevoked()
         checkDeviceSecurity()
         rollbackInterruptedRestore()
         val hasKeyFile = wrappedKeyFile.baseFile.exists()
@@ -50,6 +86,7 @@ internal class VaultStorage(context: Context) {
     }
 
     fun openAfterAuthentication(): VaultSession {
+        checkNotRevoked()
         checkDeviceSecurity()
         val keyExists = wrappedKeyFile.baseFile.exists()
         val recordsExist = entriesFile.baseFile.exists()
@@ -76,6 +113,7 @@ internal class VaultStorage(context: Context) {
     }
 
     private fun createEmptyVault(): VaultSession {
+        checkNotRevoked()
         // La clave de este dispositivo debe haberse creado ANTES del prompt.
         // Si un intento anterior falló antes de escribir datos, se reutiliza.
         val kek = existingDeviceKey()
@@ -97,6 +135,7 @@ internal class VaultStorage(context: Context) {
     }
 
     fun save(session: VaultSession, entries: List<VaultEntry>) {
+        checkNotRevoked()
         check(session.isOpen) { "Bóveda bloqueada" }
         require(entries.size <= 10000) { "Límite de entradas excedido" }
         require(entries.map { it.id }.toSet().size == entries.size) { "Entradas duplicadas" }

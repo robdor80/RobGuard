@@ -1,0 +1,13 @@
+{
+  "name": "robguard-rg03-rules",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:rules": "firebase emulators:exec --config firebase.rg03-emulator.json --only firestore --project demo-robguard-rg03 \"node --test tests/firestore-rg03.test.mjs\""
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "6.0.0",
+    "firebase": "13.2.0",
+    "firebase-tools": "15.35.0"
+  }
+}

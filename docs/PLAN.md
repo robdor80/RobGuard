@@ -1,13 +1,13 @@
 # Plan reducido RobGuard
 
-Estado actualizado (11/11/2026): **RG-00 cerrada; RG-01 implementada y validada en CI, cierre de código; RG-02 siguiente**. La validación física de la primera versión Release firmada se realizará en RG-04. Sin Codex por defecto. No introducir credenciales reales en builds de demostración.
+Estado actualizado (11/11/2026): **RG-00 y RG-01 cerradas en código; RG-02 fusionada en main; RG-03 en PR Draft #4 con reglas de acceso por dispositivo y tests de emulador**. La validación física de la primera versión Release firmada y la migración controlada de las reglas Firebase se realizarán en RG-04. Sin Codex por defecto. No introducir credenciales reales en builds de demostración.
 
 | Fase | Entrega |
 | --- | --- |
 | RG-00 ✅ | Proyecto Android, interfaz de entrada, icono, identidad y RS-05; integrada en `main` |
 | RG-01 ✅ (código) | Bóveda cifrada offline, CRUD, búsqueda, copia, generación, biometría; CI PASS, prueba física aplazada a RG-04 |
-| RG-02 ▶ | Inicio Google de cuenta única y sincronización cifrada Firebase con clave recuperable en otro dispositivo |
-| RG-03 | Inventario móvil/tablet, revocación y borrado remoto al conectarse |
+| RG-02 ✅ (código) | Google UID único y sincronización cifrada Firebase; integrado en main, pruebas físicas pendientes RG-04 |
+| RG-03 ▶ | Identidad independiente por instalación, autorización en Firestore, inventario, revocación y borrado diferido; PR #4 Draft sin desplegar |
 | RG-04 | Alta RS-05, firma oficial, Release y prueba de instalación/actualización RobStore |
 
 ## Condiciones que no se negocian
