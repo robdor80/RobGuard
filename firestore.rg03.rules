@@ -1,0 +1,143 @@
+// RG-03 (STAGING) — NO DESPLEGAR durante la migración RG-02.
+// Reglas futuras: bóveda SOLO para identidades anónimas por instalación
+// expresamente autorizadas. El UID Google ya NO puede leer la bóveda.
+// Antes de publicar: activar proveedor Anonymous, registrar primer móvil,
+// verificar tests de emulador y coordinar cambio con Release RS-05.
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function ownerUid() {
+      return 'wNVy8SirO8RZi8PvffWER0wRqrj2';
+    }
+
+    function googleOwner() {
+      return request.auth != null
+        && request.auth.uid == ownerUid()
+        && request.auth.token.firebase.sign_in_provider == 'google.com';
+    }
+
+    function anonymousInstall() {
+      return request.auth != null
+        && request.auth.token.firebase.sign_in_provider == 'anonymous';
+    }
+
+    function installationPath() {
+      return /databases/$(database)/documents/devices/$(request.auth.uid);
+    }
+
+    function activeInstall() {
+      return anonymousInstall()
+        && exists(installationPath())
+        && get(installationPath()).data.ownerUid == ownerUid()
+        && get(installationPath()).data.status == 'authorized';
+    }
+
+    function validCloud() {
+      return request.resource.data.keys().hasOnly([
+        'schema', 'revision', 'entries', 'wrappedDek'
+      ])
+      && request.resource.data.keys().hasAll([
+        'schema', 'revision', 'entries', 'wrappedDek'
+      ])
+      && request.resource.data.schema == 2
+      && request.resource.data.revision is int
+      && request.resource.data.entries is string
+      && request.resource.data.wrappedDek is string
+      && request.resource.data.entries.size() < 800000
+      && request.resource.data.wrappedDek.size() < 2048;
+    }
+
+    match /vaults/{userId} {
+      // Eliminación crucial del acceso heredado por Google UID compartido.
+      allow get: if userId == ownerUid() && activeInstall();
+      allow list: if false;
+      allow create: if userId == ownerUid() && activeInstall()
+        && validCloud() && request.resource.data.revision == 1;
+      allow update: if userId == ownerUid() && activeInstall()
+        && validCloud()
+        && request.resource.data.revision == resource.data.revision + 1
+        && request.resource.data.wrappedDek == resource.data.wrappedDek;
+      allow delete: if false;
+    }
+
+    match /devices/{deviceUid} {
+      function ownInstall() {
+        return anonymousInstall() && request.auth.uid == deviceUid;
+      }
+
+      function validPending() {
+        return request.resource.data.keys().hasOnly([
+          'schema', 'deviceUid', 'ownerUid', 'installationId',
+          'alias', 'publicKey', 'status', 'wipeRequested', 'createdAt'
+        ])
+        && request.resource.data.keys().hasAll([
+          'schema', 'deviceUid', 'ownerUid', 'installationId',
+          'alias', 'publicKey', 'status', 'wipeRequested', 'createdAt'
+        ])
+        && request.resource.data.schema == 3
+        && request.resource.data.deviceUid == deviceUid
+        && request.resource.data.ownerUid == ownerUid()
+        && request.resource.data.installationId is string
+        && request.resource.data.installationId.size() >= 16
+        && request.resource.data.installationId.size() <= 128
+        && request.resource.data.alias is string
+        && request.resource.data.alias.size() > 0
+        && request.resource.data.alias.size() <= 64
+        && request.resource.data.publicKey is string
+        && request.resource.data.publicKey.size() > 10
+        && request.resource.data.publicKey.size() <= 512
+        && request.resource.data.status == 'pending'
+        && request.resource.data.wipeRequested == false
+        && request.resource.data.createdAt == request.time;
+      }
+
+      function changedOnly(keys) {
+        return request.resource.data.diff(resource.data)
+          .affectedKeys().hasOnly(keys);
+      }
+
+      function approvedByAnother() {
+        return activeInstall() && request.auth.uid != deviceUid
+          && resource.data.ownerUid == ownerUid()
+          && resource.data.status == 'pending'
+          && request.resource.data.status == 'authorized'
+          && request.resource.data.approvedAt == request.time
+          && changedOnly(['status', 'approvedAt']);
+      }
+
+      function revokedByAnother() {
+        return activeInstall() && request.auth.uid != deviceUid
+          && resource.data.ownerUid == ownerUid()
+          && resource.data.status == 'authorized'
+          && request.resource.data.status == 'revoked'
+          && request.resource.data.wipeRequested is bool
+          && request.resource.data.revokedAt == request.time
+          && changedOnly(['status', 'wipeRequested', 'revokedAt']);
+      }
+
+      function heartbeat() {
+        return ownInstall()
+          && resource.data.status == 'authorized'
+          && request.resource.data.lastSeenAt == request.time
+          && changedOnly(['lastSeenAt']);
+      }
+
+      function wipeAcknowledged() {
+        return ownInstall()
+          && resource.data.status == 'revoked'
+          && resource.data.wipeRequested == true
+          && request.resource.data.status == 'wipe_confirmed'
+          && request.resource.data.wipedAt == request.time
+          && changedOnly(['status', 'wipedAt']);
+      }
+
+      allow get: if ownInstall() || googleOwner() || activeInstall();
+      allow list: if activeInstall();
+      // Google puede PROPONER pero nunca autorizar ni restaurar un equipo.
+      allow create: if googleOwner() && validPending();
+      allow update: if approvedByAnother() || revokedByAnother()
+        || heartbeat() || wipeAcknowledged();
+      allow delete: if false;
+    }
+  }
+}
