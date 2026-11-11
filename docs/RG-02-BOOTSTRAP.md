@@ -1,31 +1,31 @@
-# RG-02 · Alta inicial de la identidad Google sin APK Debug
+# RG-02 — Registro temporal de Firebase Authentication (cerrado)
 
-**Estado:** utilidad web temporal de un solo propósito. No es la bóveda ni permite acceder a Firestore.
+La cuenta propietaria fue autenticada correctamente con el proveedor Google,
+y se obtuvo el UID real de Firebase. El UID está incorporado a
+`app/src/main/res/values/rg02_config.xml` y a `firestore.rules`.
 
-1. Mantener `firestore.rules` con `CONFIGURE_OWNER_UID` y todos los accesos denegados.
-2. En GitHub → `robdor80/RobGuard` → Settings → Pages → Deploy from a branch,
-   seleccionar `feature/rg02-google-sync-20261111` y `/docs` y guardar.
-3. En Firebase → Authentication → Settings → Authorized domains, añadir
-   exclusivamente `robdor80.github.io`. No utilizar dominios desconocidos.
-4. Abrir `https://robdor80.github.io/RobGuard/rg02-bootstrap-google.html`
-   desde Chrome. Pulsar el botón y seleccionar la cuenta Google habitual.
-5. La página muestra únicamente el UID y el correo que devuelve Firebase Auth,
-   cierra la sesión web inmediatamente, no usa Firestore y no guarda tokens.
-6. En Firebase → Authentication → Usuarios comprobar correo y UID registrado.
-   **No subir una captura que incluya datos de recuperación ni tokens.**
-7. Incorporar ese UID a la configuración Android y las dos condiciones de
-   `firestore.rules`. Publicar las reglas y probar primero con usuario distinto
-   para confirmar que está denegado.
-8. Eliminar `docs/rg02-bootstrap-google.html` y su enlace al terminar el
-   aprovisionamiento, desautorizar `robdor80.github.io` en Firebase Auth
-   y desactivar GitHub Pages si no se necesita.
+El registro se hizo mediante una página web temporal en GitHub Pages sin
+acceder a Firestore ni a los datos de la bóveda.
 
-El archivo `google-services.json` queda fuera de Git. Solo se incorporan al
-código los identificadores públicos de cliente: API key, ID de proyecto,
-ID de la app Android e ID del cliente OAuth web. No incluyen la clave privada
-para firmar Android ni credenciales de cuenta de servicio.
+## Operaciones de cierre obligatorias
 
-**Nota:** Firebase Authentication puede registrar otras cuentas Google si
-utilizan la API pública; el acceso exclusivo a los datos se impone por UID en
-Firestore y por el chequeo de UID en RobGuard, no por el mero hecho de
-habilitar Google como proveedor.
+1. Firebase → Firestore → Reglas: pegar y publicar la versión final
+   de `firestore.rules` en esta rama. Nunca conservar las reglas públicas de test.
+2. Firebase → Authentication → Usuarios: confirmar que el UID se corresponde
+   con la cuenta Google propietaria elegida.
+3. Firebase → Authentication → Configuración → Dominios autorizados:
+   retirar `robdor80.github.io` después del registro web.
+4. GitHub → repositorio RobGuard → Settings → Pages: deshabilitar Pages
+   si no se necesita para otra finalidad.
+5. Validar que otro UID, el borrado y las rutas fuera de `/vaults/{uid}`
+   son rechazados por Firestore, y que el UID propietario puede realizar
+   únicamente las operaciones autorizadas.
+
+Las páginas HTML/JS temporales se han eliminado del árbol de la rama; no
+dejar la herramienta de aprovisionamiento publicada de forma permanente.
+No se guardaron contraseñas, claves privadas ni archivos JSON de credenciales
+Firebase Admin en el repositorio.
+
+**El UID no es un secreto.** La seguridad reside en la verificación
+criptográfica de la identidad por Firebase Authentication y en las reglas de
+Firestore, no en ocultar el UID.
