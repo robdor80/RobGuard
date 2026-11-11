@@ -6,6 +6,9 @@ import android.content.ClipDescription
 import android.content.ClipboardManager
 import android.content.Context
 import android.os.Build
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -36,6 +39,19 @@ class MainActivity : FragmentActivity() {
     private val storage by lazy { VaultStorage(this) }
     private val ownerAuth by lazy { GoogleOwnerAuth(this) }
     private val cloud by lazy { CloudVaultService(storage, ownerAuth) }
+    private val connectivity by lazy {
+        getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+    }
+    private var networkCallbackRegistered = false
+    private val networkCallback = object : ConnectivityManager.NetworkCallback() {
+        override fun onCapabilitiesChanged(network: Network, capabilities: NetworkCapabilities) {
+            if (capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)) {
+                runOnUiThread {
+                    if (started && unlocked) syncCloud()
+                }
+            }
+        }
+    }
     private var cloudPaired by mutableStateOf(false)
     private var cloudBusy by mutableStateOf(false)
     private var cloudStatus by mutableStateOf("Sólo almacenamiento local")
@@ -99,6 +115,12 @@ class MainActivity : FragmentActivity() {
         started = true
         super.onStart()
         accountLabel = ownerAuth.authorizedEmail
+        try {
+            connectivity.registerDefaultNetworkCallback(networkCallback)
+            networkCallbackRegistered = true
+        } catch (_: SecurityException) {
+            networkCallbackRegistered = false
+        }
         authorizedWhilePausedAtMs?.let { at ->
             authorizedWhilePausedAtMs = null
             if (SystemClock.elapsedRealtime() - at <= 10_000L) openAuthorizedVault()
@@ -118,6 +140,10 @@ class MainActivity : FragmentActivity() {
     }
 
     override fun onStop() {
+        if (networkCallbackRegistered) {
+            connectivity.unregisterNetworkCallback(networkCallback)
+            networkCallbackRegistered = false
+        }
         started = false
         lockVault()
         super.onStop()
@@ -359,7 +385,6 @@ class MainActivity : FragmentActivity() {
                     cloudStatus = "Bóveda recuperada · revisión ${result.revision}"
                     message = null
                     armIdleTimeout()
-                    syncCloud()
                 } else {
                     restored.close()
                 }
@@ -368,13 +393,24 @@ class MainActivity : FragmentActivity() {
                     "autenticación reciente de Android. Tu bóveda no se ha borrado."
             } finally {
                 cloudBusy = false
+                if (cloudPaired && unlocked) syncCloud()
             }
         }
+    }
+
+    private fun hasValidatedNetwork(): Boolean {
+        val network = connectivity.activeNetwork ?: return false
+        val caps = connectivity.getNetworkCapabilities(network) ?: return false
+        return caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
     }
 
     private fun syncCloud() {
         val active = session?.takeIf { unlocked && it.isOpen } ?: return
         if (!cloudPaired || cloudBusy || ownerAuth.authorizedUid == null) return
+        if (!hasValidatedNetwork()) {
+            cloudStatus = "Cambios locales pendientes · sin Internet"
+            return
+        }
         cloudBusy = true
         cloudStatus = "Sincronizando cifrado…"
         lifecycleScope.launch {

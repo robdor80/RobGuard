@@ -66,10 +66,31 @@ internal class CloudVaultService(
 
     suspend fun restore(session: VaultSession, recoveryCode: String): Pair<VaultSession, SyncResult> {
         val (uid, ref) = authorized()
-        check(session.records.isEmpty() && storage.readCloudBaseline(session, uid) == null) {
-            "No se reemplaza una bóveda local no vacía"
+        check(storage.readCloudBaseline(session, uid) == null) {
+            "Esta bóveda ya tiene copia vinculada"
         }
         val remote = readRemote(ref) ?: error("No existe copia cifrada en Firebase")
+        if (session.records.isNotEmpty()) {
+            // Recuperación de una vinculación interrumpida: sólo se admite
+            // si la DEK cifrada en Firebase coincide con la DEK local.
+            // NUNCA reemplazar una bóveda con clave diferente.
+            val candidate = es.robertodorado.robguard.vault.RecoveryCrypto.recoverDek(
+                remote.wrappedDek, uid, recoveryCode
+            )
+            val localDek = session.secretKey().encoded
+            val sameKey = try {
+                java.security.MessageDigest.isEqual(candidate, localDek)
+            } finally {
+                candidate.fill(0)
+                localDek.fill(0)
+            }
+            check(sameKey) { "La bóveda local utiliza otra clave: no se sobrescribirá" }
+            val baseline = storage.decryptFromCloud(session, uid, remote.entries)
+            storage.writeCloudBaseline(
+                session, uid, remote.revision, remote.wrappedDek, baseline
+            )
+            return session to SyncResult(session.records, remote.revision)
+        }
         val restored = storage.importRecoveredVault(
             session, uid, recoveryCode, remote.wrappedDek, remote.entries, remote.revision
         )

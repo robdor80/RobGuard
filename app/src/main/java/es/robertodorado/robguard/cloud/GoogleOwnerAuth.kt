@@ -33,17 +33,22 @@ internal class GoogleOwnerAuth(context: Context) {
         .all { it.isNotBlank() && !it.startsWith("CONFIGURE_") }
 
     private val firebaseApp: FirebaseApp? by lazy {
-        if (!isConfigured) null else FirebaseApp.getApps(appContext)
-            .firstOrNull { it.name == APP_NAME }
-            ?: FirebaseApp.initializeApp(
-                appContext,
-                FirebaseOptions.Builder()
-                    .setApiKey(apiKey)
-                    .setApplicationId(appId)
-                    .setProjectId(projectId)
-                    .build(),
-                APP_NAME
-            )
+        if (!isConfigured) null else try {
+            FirebaseApp.getApps(appContext)
+                .firstOrNull { it.name == APP_NAME }
+                ?: FirebaseApp.initializeApp(
+                    appContext,
+                    FirebaseOptions.Builder()
+                        .setApiKey(apiKey)
+                        .setApplicationId(appId)
+                        .setProjectId(projectId)
+                        .build(),
+                    APP_NAME
+                )
+        } catch (_: IllegalArgumentException) {
+            // Una configuración mal formada no puede bloquear la bóveda local.
+            null
+        }
     }
 
     private val auth: FirebaseAuth? by lazy { firebaseApp?.let(FirebaseAuth::getInstance) }
