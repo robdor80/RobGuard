@@ -187,6 +187,14 @@ class MainActivity : FragmentActivity() {
 
     private fun authenticate() {
         if (unlocked) return
+        if (deviceAuthorization.enabled && deviceSelf?.status in listOf(
+                DeviceStatus.REVOKED, DeviceStatus.REVOKE_PENDING,
+                DeviceStatus.WIPE_CONFIRMED
+            )
+        ) {
+            message = "Este dispositivo ha sido revocado. No puede abrir la bóveda."
+            return
+        }
         val keyguard = getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
         if (!keyguard.isDeviceSecure) {
             message = "Para proteger la bóveda, activa primero un PIN, patrón o contraseña en Android."
@@ -563,7 +571,7 @@ class MainActivity : FragmentActivity() {
                                 "Bóveda local borrada; confirmación pendiente"
                             }
                         } else {
-                            "Acceso a la nube revocado. Bóveda bloqueada."
+                            "Acceso remoto revocado; la bóveda se ha bloqueado en esta sesión."
                         }
                         message = deviceMessage
                     }
