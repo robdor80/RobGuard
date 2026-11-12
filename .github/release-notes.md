@@ -1,19 +1,19 @@
-# RobGuard 0.2.3 — Ajuste UX exclusivo para tablets
+# RobGuard 0.2.4 — Barra de estado Android respetada en tablets
 
-## Corrección
-- En tablets Android (ancho mínimo de pantalla de 600 dp), la barra inferior **Bóveda · Nueva · Ajustes** respeta ahora los márgenes reales de navegación del sistema Android.
-- Soluciona el solapamiento que impedía tocar «Ajustes» en la **Samsung Galaxy Tab S9+**, tanto en vertical como en horizontal.
-- Utiliza `LocalConfiguration.current.smallestScreenWidthDp` como condición responsive equivalente a una media query `sw600dp`.
-- Aplica `navigationBarsPadding()` exclusivamente a la barra inferior de tablets; admite navegación por gestos, tres botones y barra lateral en horizontal.
-- En teléfonos (incluido Realme GT Neo 2) se conserva sin modificaciones el diseño anterior.
+## Corrección UX
+- Corregido el solapamiento superior de RobGuard con la zona de fecha, hora, batería y demás iconos Android de la Samsung Galaxy Tab S9+.
+- La cabecera de RobGuard añade `statusBarsPadding()` **solo en tablets** (`smallestScreenWidthDp >= 600`) en vertical y horizontal.
+- El ajuste se aplica con la bóveda tanto bloqueada como desbloqueada; la barra superior y el botón «Bloquear» quedan por debajo del área del sistema.
+- Se conserva íntegramente la corrección inferior `navigationBarsPadding()` de la versión 0.2.3.
+- El Realme GT Neo 2 y demás teléfonos no reciben cambios visuales.
 
-## Seguridad y actualización oficial
-- Sin modificaciones en cifrado, Android Keystore, persistencia, Firebase, sincronización, cuentas o autorización de dispositivos.
-- Misma identidad Android `es.robertodorado.robguard` y mismo certificado Release histórico.
-- `versionName=0.2.3`, `versionCode=5`.
-- Publicar **solo desde RobPublisher** mediante RS-05 y actualizar desde RobStore **sin desinstalar ni borrar datos**.
+## Distribución y seguridad
+- Sin cambios en secretos, firma, cifrado, Firebase, datos de la bóveda, autorizaciones de dispositivos ni permisos.
+- Identidad Android invariable `es.robertodorado.robguard`; `versionCode=6`, `versionName=0.2.4`.
+- Publicar únicamente mediante RobPublisher → GitHub Actions RS-05 → RobStore, usando el certificado histórico.
+- Instalar sobre la versión anterior; **no desinstalar ni borrar datos**.
 
-## Pruebas
-- CI: `testReleaseUnitTest`, `lintRelease`, `assembleRelease`, comprobación RS-05.
-- Verificación física pendiente: acceso a Ajustes en Galaxy Tab S9+ vertical/horizontal, comprobar que queda por encima de la navegación Android y que el Realme no cambia.
-- La compilación verde no equivale a validación de interacción en tablet real.
+## Validación
+- CI: `testReleaseUnitTest`, `lintRelease`, `assembleRelease`, contrato RS-05.
+- Validación física pendiente en Galaxy Tab S9+: barras de sistema y cabecera sin solapamiento, en vertical y horizontal, bloqueada y desbloqueada.
+- Confirmación visual de que en teléfono no ha cambiado el diseño.

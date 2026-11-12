@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
@@ -128,8 +129,14 @@ internal fun RobGuardApp(
 
 @Composable
 private fun Header(locked: Boolean, onLock: () -> Unit = {}) {
+    val tabletSystemBarSafeArea = tabletNeedsNavigationSafeArea(
+        LocalConfiguration.current.smallestScreenWidthDp
+    )
     Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
+        modifier = Modifier.fillMaxWidth()
+            // Cabecera por debajo de la barra de estado Android SOLO en tablets.
+            .then(if (tabletSystemBarSafeArea) Modifier.statusBarsPadding() else Modifier)
+            .padding(horizontal = 20.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
