@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
@@ -34,6 +35,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
@@ -57,6 +59,9 @@ internal enum class GuardSection(val title: String) {
     NEW("Nueva"),
     SETTINGS("Ajustes")
 }
+
+// Equivalente a @media (min-width: 600dp), estable en vertical y horizontal.
+internal fun tabletNeedsNavigationSafeArea(smallestScreenWidthDp: Int) = smallestScreenWidthDp >= 600
 
 private val Palette = darkColorScheme(
     primary = Cyan,
@@ -206,6 +211,7 @@ private fun UnlockedApp(
     onApproveDevice: (String) -> Unit,
     onRevokeDevice: (String, Boolean) -> Unit
 ) {
+    val tabletNavigationSafeArea = tabletNeedsNavigationSafeArea(LocalConfiguration.current.smallestScreenWidthDp)
     var section by remember { mutableStateOf(GuardSection.VAULT) }
     var selected by remember { mutableStateOf<VaultEntry?>(null) }
     Scaffold(
@@ -213,7 +219,9 @@ private fun UnlockedApp(
         topBar = { Header(locked = false, onLock = onLock) },
         bottomBar = {
             Row(
-                modifier = Modifier.fillMaxWidth().background(Panel).padding(6.dp),
+                modifier = Modifier.fillMaxWidth().background(Panel)
+                    .then(if (tabletNavigationSafeArea) Modifier.navigationBarsPadding() else Modifier)
+                    .padding(6.dp),
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
                 GuardSection.entries.forEach { destination ->
